@@ -1,0 +1,46 @@
+{
+  "name": "logseq-journal-time-prefix",
+  "version": "0.1.0",
+  "description": "Automatically add a local time prefix to top-level blocks in Logseq DB journals.",
+  "author": "Asaki14",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Asaki14/logseq-journal-time-prefix.git"
+  },
+  "homepage": "https://github.com/Asaki14/logseq-journal-time-prefix#readme",
+  "bugs": {
+    "url": "https://github.com/Asaki14/logseq-journal-time-prefix/issues"
+  },
+  "keywords": [
+    "logseq",
+    "logseq-plugin",
+    "journal",
+    "timestamp",
+    "db-graph"
+  ],
+  "main": "dist/index.html",
+  "scripts": {
+    "build": "tsc --noEmit && vite build",
+    "dev": "vite build --watch",
+    "test": "vitest run",
+    "check": "npm run test && npm run build"
+  },
+  "logseq": {
+    "id": "journal-time-prefix",
+    "title": "Journal Time Prefix",
+    "icon": "icon.svg",
+    "effect": false,
+    "unsupportedGraphType": "file"
+  },
+  "devDependencies": {
+    "@logseq/libs": "0.2.11",
+    "typescript": "7.0.2",
+    "vite": "8.1.5",
+    "vitest": "4.1.10"
+  },
+  "overrides": {
+    "dompurify": "3.4.12",
+    "lodash-es": "4.18.1"
+  }
+}
