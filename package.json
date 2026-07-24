@@ -1,6 +1,6 @@
 {
   "name": "logseq-journal-time-prefix",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Automatically add a local time prefix to top-level blocks in Logseq DB journals.",
   "author": "Asaki14",
   "license": "MIT",
