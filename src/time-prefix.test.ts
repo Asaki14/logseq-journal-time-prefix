@@ -2,11 +2,19 @@ import { describe, expect, it } from 'vitest'
 import type { IDatom } from '@logseq/libs/dist/LSPlugin'
 import {
   changedFromEmpty,
+  compareBlockOrder,
   formatTimePrefix,
+  getHeading,
   hasTimePrefix,
+  headingTitleIsExcluded,
   isContentInsertion,
+  isInExcludedHeadingSection,
   isJournalPage,
   isTopLevelBlock,
+  markdownHeading,
+  parseListSetting,
+  stripTimePrefix,
+  titleHasExcludedTag,
 } from './time-prefix'
 
 describe('formatTimePrefix', () => {
@@ -82,5 +90,96 @@ describe('isJournalPage', () => {
     expect(isJournalPage({ type: 'page', 'journal?': true })).toBe(true)
     expect(isJournalPage({ type: 'page', 'journal?': false })).toBe(false)
     expect(isJournalPage(null)).toBe(false)
+  })
+})
+
+describe('exclusion settings', () => {
+  it('parses newline and comma separated values without duplicates', () => {
+    expect(parseListSetting('Work\nIdeas, Work，Personal')).toEqual([
+      'Work',
+      'Ideas',
+      'Personal',
+    ])
+  })
+
+  it('strips a generated time prefix', () => {
+    expect(stripTimePrefix('[09:07] 内容')).toBe('内容')
+    expect(stripTimePrefix('内容')).toBe('内容')
+  })
+})
+
+describe('heading exclusions', () => {
+  it('sorts Logseq fractional orders by raw code points', () => {
+    const blocks = [
+      { order: 'b8f' },
+      { order: 'b8a' },
+      { order: 'b8Z' },
+      { order: 'b8eV' },
+      { order: 'b8e' },
+    ]
+
+    expect(blocks.sort(compareBlockOrder).map(({ order }) => order)).toEqual([
+      'b8Z',
+      'b8a',
+      'b8e',
+      'b8eV',
+      'b8f',
+    ])
+  })
+
+  it('reads Markdown and DB heading levels', () => {
+    expect(markdownHeading('## Ideas')).toEqual({ level: 2, title: 'Ideas' })
+    expect(
+      getHeading({
+        title: 'Ideas',
+        properties: { 'logseq.property/heading': 1 },
+      }),
+    ).toEqual({ level: 1, title: 'Ideas' })
+  })
+
+  it('matches exact heading titles case-insensitively', () => {
+    expect(headingTitleIsExcluded(' Ideas ', ['ideas'])).toBe(true)
+    expect(headingTitleIsExcluded('Ideas later', ['Ideas'])).toBe(false)
+  })
+
+  it('excludes through the next heading of the same or higher level', () => {
+    const blocks = [
+      { uuid: 'a', title: '# Work' },
+      { uuid: 'b', title: 'task' },
+      { uuid: 'c', title: '## Detail' },
+      { uuid: 'd', title: 'note' },
+      { uuid: 'e', title: '# Personal' },
+      { uuid: 'f', title: 'home' },
+    ]
+
+    expect(isInExcludedHeadingSection(blocks, 'a', ['Work'])).toBe(true)
+    expect(isInExcludedHeadingSection(blocks, 'd', ['Work'])).toBe(true)
+    expect(isInExcludedHeadingSection(blocks, 'e', ['Work'])).toBe(false)
+    expect(isInExcludedHeadingSection(blocks, 'f', ['Work'])).toBe(false)
+  })
+
+  it('recognizes DB graph heading fields returned by Logseq', () => {
+    const blocks = [
+      { uuid: 'ling', title: 'Ling', heading: 1, order: 'b8f' },
+      { uuid: 'target', title: '[23:40] test', order: 'b8eV' },
+      { uuid: 'investment', title: 'Investment', heading: 1, order: 'b8Z' },
+      { uuid: 'older', title: 'old', order: 'b8a' },
+    ].sort(compareBlockOrder)
+
+    expect(
+      isInExcludedHeadingSection(blocks, 'target', ['Investment']),
+    ).toBe(true)
+    expect(isInExcludedHeadingSection(blocks, 'ling', ['Investment'])).toBe(
+      false,
+    )
+  })
+})
+
+describe('tag exclusions', () => {
+  it('matches plain and bracketed tags without partial matches', () => {
+    expect(titleHasExcludedTag('skip this #no-time', ['no-time'])).toBe(true)
+    expect(titleHasExcludedTag('skip #[[No Time]]', ['#no time'])).toBe(true)
+    expect(titleHasExcludedTag('keep #no-timer', ['no-time'])).toBe(false)
+    expect(titleHasExcludedTag('[09:07] #no-time item', ['no-time'])).toBe(true)
   })
 })

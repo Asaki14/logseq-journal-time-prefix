@@ -19,6 +19,17 @@
 - 支持普通键盘输入、粘贴和中文 IME 组合输入。
 - 已有 `[HH:mm] ` 前缀时不会重复添加。
 - 时间取自操作系统本地时区。
+- 可按完整标题名排除 section：标题本身到下一个同级或更高级标题之间均不添加时间。
+- 可按标签排除 block 及其子树。
+
+### 排除规则
+
+在插件设置中配置：
+
+- `Excluded heading titles / 排除的标题`：每行一个完整标题，不含 `#`。匹配忽略大小写。
+- `Excluded block tags / 排除的 block 标签`：每行一个标签，`#` 可写可不写；支持 `#tag` 与 `#[[tag name]]`。
+
+两项留空时保持原有行为。插件仍然只处理 Journal page，不处理普通 page。
 
 ### 安装
 
@@ -67,6 +78,17 @@ A lightweight plugin for **Logseq DB graphs**. When you first enter content in a
 - Supports regular keyboard input, paste, and Chinese IME composition.
 - Never duplicates an existing `[HH:mm] ` prefix.
 - Uses the operating system’s local time zone.
+- Can exclude a section by its exact heading title, through the next heading of the same or higher level.
+- Can exclude a tagged block and its subtree.
+
+### Exclusion rules
+
+Configure these fields in the plugin settings:
+
+- `Excluded heading titles / 排除的标题`: one exact title per line, without `#`. Matching is case-insensitive.
+- `Excluded block tags / 排除的 block 标签`: one tag per line, with or without `#`; both `#tag` and `#[[tag name]]` are supported.
+
+Leave both fields empty to preserve the original behavior. The plugin still only processes journal pages, not regular pages.
 
 ### Installation
 

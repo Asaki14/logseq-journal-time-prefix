@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented here.
 
+## [Unreleased]
+
+### Added
+
+- Add configurable heading-section exclusions.
+- Add configurable block-tag exclusions.
+
+### Fixed
+
+- Refresh exclusion state when Logseq reuses the same textarea for a newly created block.
+- Persist asynchronous live-editor corrections through a synthetic input event.
+- Read ordered DB heading sections directly from Datascript, with sibling API fallback.
+- Sort Logseq fractional block orders by raw code points instead of locale collation, which misplaced `b8Z` after lowercase orders and broke section detection.
+- Resolve DB block tags from tag entity IDs after Logseq removes tag markup from the title.
+
 ## [0.1.0] - 2026-07-24
 
 ### Added

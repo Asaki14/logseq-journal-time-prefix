@@ -1,17 +1,75 @@
 import '@logseq/libs'
-import type { BlockEntity, PageEntity } from '@logseq/libs/dist/LSPlugin'
+import type {
+  BlockEntity,
+  PageEntity,
+  SettingSchemaDesc,
+} from '@logseq/libs/dist/LSPlugin'
 import {
   changedFromEmpty,
+  compareBlockOrder,
   formatTimePrefix,
+  getHeading,
   hasTimePrefix,
+  headingTitleIsExcluded,
   isContentInsertion,
+  isInExcludedHeadingSection,
   isJournalPage,
   isTopLevelBlock,
+  markdownHeading,
+  normalizeTag,
+  parseListSetting,
+  stripTimePrefix,
+  titleHasExcludedTag,
 } from './time-prefix'
+
+const settingsSchema: SettingSchemaDesc[] = [
+  {
+    key: 'excludedHeadingTitles',
+    type: 'string',
+    default: '',
+    title: 'Excluded heading titles / 排除的标题',
+    description:
+      'One exact title per line. The heading and its section, up to the next heading of the same or higher level, will not receive timestamps. / 每行一个完整标题；该标题至下一个同级或更高级标题之间不加时间戳。',
+    inputAs: 'textarea',
+  },
+  {
+    key: 'excludedTags',
+    type: 'string',
+    default: '',
+    title: 'Excluded block tags / 排除的 block 标签',
+    description:
+      'One tag per line, with or without #. A block carrying the tag and its subtree will not receive timestamps. / 每行一个标签，可省略 #；带此标签的 block 及其子树不加时间戳。',
+    inputAs: 'textarea',
+  },
+]
+
+logseq.useSettingsSchema(settingsSchema)
+
+interface PrefixSettings {
+  excludedHeadingTitles: string[]
+  excludedTags: string[]
+}
+
+interface EditorContext {
+  blockUuid: string
+  headingLevel: number | null
+  excludedBySection: boolean
+  excludedByTag: boolean
+}
 
 const processingBlocks = new Set<string>()
 const journalPageCache = new Map<number, boolean>()
-const journalEditors = new WeakSet<HTMLTextAreaElement>()
+const journalEditors = new WeakMap<HTMLTextAreaElement, EditorContext>()
+const syntheticEditorUpdates = new WeakSet<HTMLTextAreaElement>()
+
+function getSettings(): PrefixSettings {
+  return {
+    excludedHeadingTitles: parseListSetting(
+      logseq.settings?.excludedHeadingTitles,
+    ),
+    excludedTags: parseListSetting(logseq.settings?.excludedTags),
+  }
+}
 
 function getHostDocument(): Document {
   return window.parent.document
@@ -38,9 +96,140 @@ async function blockIsOnJournal(block: BlockEntity): Promise<boolean> {
   return result
 }
 
+function blockTagIds(block: BlockEntity): Set<number> {
+  const tags = (block as Record<string, unknown>).tags
+  if (!Array.isArray(tags)) return new Set()
+
+  return new Set(
+    tags.flatMap((tag) => {
+      if (typeof tag === 'number') return [tag]
+      if (tag && typeof tag === 'object' && 'id' in tag) {
+        const id = (tag as { id?: unknown }).id
+        return typeof id === 'number' ? [id] : []
+      }
+      return []
+    }),
+  )
+}
+
+async function blockHasExcludedTag(
+  block: BlockEntity,
+  excludedTags: string[],
+): Promise<boolean> {
+  if (titleHasExcludedTag(block.title, excludedTags)) return true
+
+  const tagIds = blockTagIds(block)
+  if (tagIds.size === 0) return false
+
+  for (const configuredTag of excludedTags) {
+    const tagName = normalizeTag(configuredTag)
+    if (!tagName) continue
+    const tagPage = await logseq.Editor.getPage(tagName)
+    if (tagPage && tagIds.has(tagPage.id)) return true
+  }
+  return false
+}
+
+async function getSiblingBlocksFromDb(
+  block: BlockEntity,
+): Promise<BlockEntity[] | null> {
+  const parentId = block.parent?.id
+  if (!parentId) return null
+
+  try {
+    const rows = (await logseq.DB.datascriptQuery(`
+      [:find ?uuid ?title ?order ?heading
+       :where
+       [?b :block/parent ${parentId}]
+       [?b :block/uuid ?uuid]
+       [?b :block/title ?title]
+       [?b :block/order ?order]
+       [(get-else $ ?b :logseq.property/heading 0) ?heading]]
+    `)) as Array<[string, string, string, number]> | null
+
+    if (!rows) return null
+    return rows
+      .map(([uuid, title, order, heading]) => ({
+        uuid,
+        title,
+        order,
+        heading,
+      } as unknown as BlockEntity))
+      .sort(compareBlockOrder)
+  } catch (error) {
+    console.warn('[journal-time-prefix] Failed to query sibling blocks', error)
+    return null
+  }
+}
+
+async function blockIsInExcludedHeadingSection(
+  block: BlockEntity,
+  excludedHeadingTitles: string[],
+): Promise<boolean> {
+  if (excludedHeadingTitles.length === 0) return false
+
+  const currentHeading = getHeading(block)
+  if (
+    currentHeading &&
+    headingTitleIsExcluded(currentHeading.title, excludedHeadingTitles)
+  ) {
+    return true
+  }
+
+  const siblingBlocks = await getSiblingBlocksFromDb(block)
+  if (siblingBlocks?.some((sibling) => sibling.uuid === block.uuid)) {
+    return isInExcludedHeadingSection(
+      siblingBlocks,
+      block.uuid,
+      excludedHeadingTitles,
+    )
+  }
+
+  // Fall back to the editor sibling API if the direct DB query is unavailable.
+  let enclosingLevel = 7
+  let previous = await logseq.Editor.getPreviousSiblingBlock(block.uuid)
+  const visited = new Set<string>()
+
+  while (previous && !visited.has(previous.uuid)) {
+    visited.add(previous.uuid)
+    const heading = getHeading(previous)
+    if (heading && heading.level < enclosingLevel) {
+      if (headingTitleIsExcluded(heading.title, excludedHeadingTitles)) {
+        return true
+      }
+      enclosingLevel = heading.level
+      if (enclosingLevel === 1) return false
+    }
+    previous = await logseq.Editor.getPreviousSiblingBlock(previous.uuid)
+  }
+
+  return false
+}
+
+async function blockIsExcluded(
+  block: BlockEntity,
+  settings = getSettings(),
+): Promise<boolean> {
+  const excludedByTag = await blockHasExcludedTag(
+    block,
+    settings.excludedTags,
+  )
+  const excludedBySection = await blockIsInExcludedHeadingSection(
+    block,
+    settings.excludedHeadingTitles,
+  )
+  return excludedByTag || excludedBySection
+}
+
 async function addPrefix(blockUuid: string): Promise<void> {
   const latest = await logseq.Editor.getBlock(blockUuid)
-  if (!latest?.title || hasTimePrefix(latest.title)) return
+  if (
+    !latest?.title ||
+    hasTimePrefix(latest.title) ||
+    (await blockIsExcluded(latest))
+  ) {
+    return
+  }
 
   // Never call editBlock while the user is typing. It replaces the live editor
   // state and can swallow subsequent keystrokes. The input listener owns this
@@ -48,7 +237,11 @@ async function addPrefix(blockUuid: string): Promise<void> {
   if ((await logseq.Editor.checkEditing()) === blockUuid) return
 
   const current = await logseq.Editor.getBlock(blockUuid)
-  if (current?.title && !hasTimePrefix(current.title)) {
+  if (
+    current?.title &&
+    !hasTimePrefix(current.title) &&
+    !(await blockIsExcluded(current))
+  ) {
     await logseq.Editor.updateBlock(
       blockUuid,
       `${formatTimePrefix(new Date())}${current.title}`,
@@ -67,6 +260,24 @@ async function handleBlock(block: BlockEntity): Promise<void> {
     console.error('[journal-time-prefix] Failed to prefix block', error)
   } finally {
     processingBlocks.delete(block.uuid)
+  }
+}
+
+async function createEditorContext(
+  block: BlockEntity,
+): Promise<EditorContext> {
+  const settings = getSettings()
+  const heading = getHeading(block)
+  const [excludedBySection, excludedByTag] = await Promise.all([
+    blockIsInExcludedHeadingSection(block, settings.excludedHeadingTitles),
+    blockHasExcludedTag(block, settings.excludedTags),
+  ])
+
+  return {
+    blockUuid: block.uuid,
+    headingLevel: heading?.level ?? null,
+    excludedBySection,
+    excludedByTag,
   }
 }
 
@@ -92,30 +303,68 @@ async function rememberJournalEditor(
     return
   }
 
+  const context = await createEditorContext(block)
   const stillEditing = await logseq.Editor.checkEditing()
   if (
     stillEditing === editingBlock &&
     textarea.isConnected &&
     textarea.ownerDocument.activeElement === textarea
   ) {
-    journalEditors.add(textarea)
+    journalEditors.set(textarea, context)
   }
+}
+
+function titleIsExcluded(
+  title: string,
+  context: EditorContext,
+  settings: PrefixSettings,
+): boolean {
+  if (context.excludedBySection || context.excludedByTag) return true
+  if (titleHasExcludedTag(title, settings.excludedTags)) return true
+
+  const heading = markdownHeading(title)
+  const isHeading = context.headingLevel !== null || heading !== null
+  return Boolean(
+    isHeading &&
+      headingTitleIsExcluded(
+        heading?.title ?? stripTimePrefix(title).trim(),
+        settings.excludedHeadingTitles,
+      ),
+  )
+}
+
+function removeLivePrefix(textarea: HTMLTextAreaElement): boolean {
+  const prefix = textarea.value.match(/^\[\d{2}:\d{2}\]\s/)?.[0]
+  if (!prefix) return false
+  textarea.setRangeText('', 0, prefix.length, 'preserve')
+  return true
 }
 
 function prefixLiveEditor(
   target: EventTarget | null,
   requireContent: boolean,
-): void {
+): boolean {
   const textarea = getTextarea(target)
+  const context = textarea ? journalEditors.get(textarea) : undefined
+  if (!textarea || !context) return false
+
+  const settings = getSettings()
+  if (titleIsExcluded(textarea.value, context, settings)) {
+    return removeLivePrefix(textarea)
+  }
+
   if (
-    !textarea ||
-    !journalEditors.has(textarea) ||
     hasTimePrefix(textarea.value) ||
     (requireContent && !textarea.value.trim()) ||
     (!requireContent && textarea.value.trim().length > 0)
   ) {
-    return
+    return false
   }
+
+  // A raw Markdown heading must remain at the start until Logseq parses its
+  // heading level. The committed-block fallback prefixes it later when it is
+  // not part of an excluded section.
+  if (/^#{1,6}(?:\s|$)/u.test(textarea.value.trimStart())) return false
 
   // Runs during capture, before Logseq handles the same editing event. Updating
   // the live textarea here lets Logseq persist one coherent value and avoids
@@ -128,6 +377,52 @@ function prefixLiveEditor(
     0,
     requireContent ? 'preserve' : 'end',
   )
+  return true
+}
+
+function dispatchSyntheticEditorInput(textarea: HTMLTextAreaElement): void {
+  const InputEventConstructor = textarea.ownerDocument.defaultView?.InputEvent
+  if (!InputEventConstructor) return
+  syntheticEditorUpdates.add(textarea)
+  textarea.dispatchEvent(
+    new InputEventConstructor('input', {
+      bubbles: true,
+      inputType: 'insertText',
+    }),
+  )
+}
+
+async function recoverEditorContext(
+  textarea: HTMLTextAreaElement,
+): Promise<void> {
+  await rememberJournalEditor(textarea)
+  if (
+    !textarea.isConnected ||
+    textarea.ownerDocument.activeElement !== textarea
+  ) {
+    return
+  }
+
+  if (prefixLiveEditor(textarea, true)) {
+    // The original input event has already reached Logseq while the async
+    // context was loading. Emit one synthetic event so the corrected textarea
+    // value (especially a removed stale prefix) is persisted.
+    dispatchSyntheticEditorInput(textarea)
+  }
+}
+
+function onEditorStructureKeydown(event: KeyboardEvent): void {
+  if (!['Enter', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
+  const textarea = getTextarea(event.target)
+  if (!textarea) return
+
+  // Logseq reuses one textarea when Enter creates the next block. focusin does
+  // not fire, so retaining the old block's section classification causes the
+  // first character in the new block to use stale exclusion rules.
+  journalEditors.delete(textarea)
+  window.setTimeout(() => {
+    void recoverEditorContext(textarea)
+  }, 0)
 }
 
 function onBeforeEditorInput(event: Event): void {
@@ -145,7 +440,14 @@ function onBeforeEditorInput(event: Event): void {
 
 function onEditorInput(event: Event): void {
   if ('isComposing' in event && event.isComposing === true) return
-  prefixLiveEditor(event.target, true)
+  const textarea = getTextarea(event.target)
+  if (!textarea) return
+  if (syntheticEditorUpdates.delete(textarea)) return
+
+  prefixLiveEditor(textarea, true)
+  if (!journalEditors.has(textarea)) {
+    void recoverEditorContext(textarea)
+  }
 }
 
 function onCompositionEnd(event: Event): void {
@@ -178,16 +480,23 @@ async function main(): Promise<void> {
 
   const hostDocument = getHostDocument()
   hostDocument.addEventListener('focusin', onEditorFocus, true)
+  hostDocument.addEventListener('keydown', onEditorStructureKeydown, true)
   hostDocument.addEventListener('beforeinput', onBeforeEditorInput, true)
   hostDocument.addEventListener('input', onEditorInput, true)
   hostDocument.addEventListener('compositionend', onCompositionEnd, true)
   void rememberJournalEditor(hostDocument.activeElement)
 
+  const removeSettingsListener = logseq.onSettingsChanged(() => {
+    void rememberJournalEditor(hostDocument.activeElement)
+  })
+
   logseq.beforeunload(async () => {
     hostDocument.removeEventListener('focusin', onEditorFocus, true)
+    hostDocument.removeEventListener('keydown', onEditorStructureKeydown, true)
     hostDocument.removeEventListener('beforeinput', onBeforeEditorInput, true)
     hostDocument.removeEventListener('input', onEditorInput, true)
     hostDocument.removeEventListener('compositionend', onCompositionEnd, true)
+    removeSettingsListener()
   })
 
   logseq.App.onCurrentGraphChanged(() => {
