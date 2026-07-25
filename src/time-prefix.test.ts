@@ -1,8 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { IDatom } from '@logseq/libs/dist/LSPlugin'
 import {
+  caretAfterPrefixInsertion,
   changedFromEmpty,
   compareBlockOrder,
+  DEFAULT_TIME_PREFIX_FORMAT,
   formatTimePrefix,
   getHeading,
   hasTimePrefix,
@@ -12,14 +14,29 @@ import {
   isJournalPage,
   isTopLevelBlock,
   markdownHeading,
+  matchTimePrefix,
   parseListSetting,
+  parseTimePrefixFormat,
+  setTimePrefixFormat,
   stripTimePrefix,
   titleHasExcludedTag,
 } from './time-prefix'
 
+afterEach(() => {
+  setTimePrefixFormat(DEFAULT_TIME_PREFIX_FORMAT)
+})
+
 describe('formatTimePrefix', () => {
   it('formats local time as HH:mm', () => {
     expect(formatTimePrefix(new Date(2026, 4, 4, 9, 7))).toBe('[09:07] ')
+  })
+
+  it('follows the configured format', () => {
+    setTimePrefixFormat('({time}) ')
+    expect(formatTimePrefix(new Date(2026, 4, 4, 9, 7))).toBe('(09:07) ')
+
+    setTimePrefixFormat('{time} ')
+    expect(formatTimePrefix(new Date(2026, 4, 4, 9, 7))).toBe('09:07 ')
   })
 })
 
@@ -27,6 +44,61 @@ describe('hasTimePrefix', () => {
   it('recognizes a valid prefix', () => {
     expect(hasTimePrefix('[14:32] 内容')).toBe(true)
     expect(hasTimePrefix('内容')).toBe(false)
+  })
+})
+
+describe('configurable prefix format', () => {
+  it('keeps the built-in format for values without the time placeholder', () => {
+    expect(parseTimePrefixFormat('no placeholder')).toBe(
+      DEFAULT_TIME_PREFIX_FORMAT,
+    )
+    expect(parseTimePrefixFormat(undefined)).toBe(DEFAULT_TIME_PREFIX_FORMAT)
+    expect(parseTimePrefixFormat('【{time}】')).toBe('【{time}】')
+  })
+
+  it('detects the configured wrapper', () => {
+    setTimePrefixFormat('({time}) ')
+    expect(hasTimePrefix('(14:32) 内容')).toBe(true)
+    expect(hasTimePrefix('14:32 内容')).toBe(false)
+    expect(stripTimePrefix('(14:32) 内容')).toBe('内容')
+  })
+
+  it('detects an empty wrapper', () => {
+    setTimePrefixFormat('{time} ')
+    expect(hasTimePrefix('14:32 内容')).toBe(true)
+    expect(hasTimePrefix('内容')).toBe(false)
+    expect(stripTimePrefix('14:32 内容')).toBe('内容')
+  })
+
+  it('still recognizes blocks written with the built-in format', () => {
+    setTimePrefixFormat('【{time}】')
+    expect(hasTimePrefix('[14:32] 旧内容')).toBe(true)
+    expect(hasTimePrefix('【14:32】新内容')).toBe(true)
+    expect(stripTimePrefix('[14:32] 旧内容')).toBe('旧内容')
+    expect(matchTimePrefix('【14:32】新内容')).toBe('【14:32】')
+  })
+
+  it('treats regular expression characters in the format literally', () => {
+    setTimePrefixFormat('({time}) ')
+    expect(hasTimePrefix('a14:32b 内容')).toBe(false)
+  })
+})
+
+describe('caretAfterPrefixInsertion', () => {
+  it('moves a caret the browser placed as if the prefix were absent', () => {
+    // Chromium leaves the caret at the length of an IME commit, so a four
+    // character commit lands inside the prefix: `[12:|30] 今天天气`.
+    expect(caretAfterPrefixInsertion('[12:30] 今天天气', 4, 8, 8)).toBe(12)
+    expect(caretAfterPrefixInsertion('[12:30] pasted note', 11, 8, 8)).toBe(19)
+  })
+
+  it('leaves a correctly positioned caret alone', () => {
+    expect(caretAfterPrefixInsertion('[12:30] h', 9, 8, 8)).toBeNull()
+    expect(caretAfterPrefixInsertion('[12:30] 今天天气', 12, 8, 8)).toBeNull()
+  })
+
+  it('ignores a value that shrank below the inserted prefix', () => {
+    expect(caretAfterPrefixInsertion('[12:3', 5, 8, 8)).toBeNull()
   })
 })
 
