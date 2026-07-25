@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { IDatom } from '@logseq/libs/dist/LSPlugin'
 import {
+  caretAfterPrefixInsertion,
   changedFromEmpty,
   compareBlockOrder,
   formatTimePrefix,
@@ -27,6 +28,24 @@ describe('hasTimePrefix', () => {
   it('recognizes a valid prefix', () => {
     expect(hasTimePrefix('[14:32] 内容')).toBe(true)
     expect(hasTimePrefix('内容')).toBe(false)
+  })
+})
+
+describe('caretAfterPrefixInsertion', () => {
+  it('moves a caret the browser placed as if the prefix were absent', () => {
+    // Chromium leaves the caret at the length of an IME commit, so a four
+    // character commit lands inside the prefix: `[12:|30] 今天天气`.
+    expect(caretAfterPrefixInsertion('[12:30] 今天天气', 4, 8, 8)).toBe(12)
+    expect(caretAfterPrefixInsertion('[12:30] pasted note', 11, 8, 8)).toBe(19)
+  })
+
+  it('leaves a correctly positioned caret alone', () => {
+    expect(caretAfterPrefixInsertion('[12:30] h', 9, 8, 8)).toBeNull()
+    expect(caretAfterPrefixInsertion('[12:30] 今天天气', 12, 8, 8)).toBeNull()
+  })
+
+  it('ignores a value that shrank below the inserted prefix', () => {
+    expect(caretAfterPrefixInsertion('[12:3', 5, 8, 8)).toBeNull()
   })
 })
 

@@ -5,6 +5,7 @@ import type {
   SettingSchemaDesc,
 } from '@logseq/libs/dist/LSPlugin'
 import {
+  caretAfterPrefixInsertion,
   changedFromEmpty,
   compareBlockOrder,
   formatTimePrefix,
@@ -61,6 +62,10 @@ const processingBlocks = new Set<string>()
 const journalPageCache = new Map<number, boolean>()
 const journalEditors = new WeakMap<HTMLTextAreaElement, EditorContext>()
 const syntheticEditorUpdates = new WeakSet<HTMLTextAreaElement>()
+const pendingCaretRepairs = new WeakMap<
+  HTMLTextAreaElement,
+  { prefixLength: number; valueLength: number }
+>()
 
 function getSettings(): PrefixSettings {
   return {
@@ -371,13 +376,40 @@ function prefixLiveEditor(
   // re-entering/repositioning the editor through async plugin APIs. Before an
   // ordinary character is inserted, move the caret behind the prefix; keeping
   // it at position 0 would produce `character[prefix]` and trigger a duplicate.
-  textarea.setRangeText(
-    formatTimePrefix(new Date()),
-    0,
-    0,
-    requireContent ? 'preserve' : 'end',
-  )
+  const prefix = formatTimePrefix(new Date())
+  textarea.setRangeText(prefix, 0, 0, requireContent ? 'preserve' : 'end')
+
+  if (!requireContent) {
+    // The browser still has to apply the insertion this event announced, and it
+    // may place the caret as if the prefix were not there. Let the following
+    // input event verify where the caret actually landed.
+    pendingCaretRepairs.set(textarea, {
+      prefixLength: prefix.length,
+      valueLength: textarea.value.length,
+    })
+  }
   return true
+}
+
+function repairPrefixCaret(textarea: HTMLTextAreaElement): void {
+  const pending = pendingCaretRepairs.get(textarea)
+  if (!pending) return
+  pendingCaretRepairs.delete(textarea)
+
+  if (
+    textarea.selectionStart !== textarea.selectionEnd ||
+    !hasTimePrefix(textarea.value)
+  ) {
+    return
+  }
+
+  const caret = caretAfterPrefixInsertion(
+    textarea.value,
+    textarea.selectionStart,
+    pending.prefixLength,
+    pending.valueLength,
+  )
+  if (caret !== null) textarea.setSelectionRange(caret, caret)
 }
 
 function dispatchSyntheticEditorInput(textarea: HTMLTextAreaElement): void {
@@ -439,9 +471,11 @@ function onBeforeEditorInput(event: Event): void {
 }
 
 function onEditorInput(event: Event): void {
-  if ('isComposing' in event && event.isComposing === true) return
   const textarea = getTextarea(event.target)
   if (!textarea) return
+
+  repairPrefixCaret(textarea)
+  if ('isComposing' in event && event.isComposing === true) return
   if (syntheticEditorUpdates.delete(textarea)) return
 
   prefixLiveEditor(textarea, true)

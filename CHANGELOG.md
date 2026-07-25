@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## [Unreleased]
+
+### Fixed
+
+- Keep the caret behind the prefix when the browser applies the insertion itself. A Chinese IME commit or a paste in an empty journal block left the caret inside the prefix, for example `[12:|30] 今天天气`, because Chromium positions the caret from the target range captured before the prefix was inserted.
+
 ## [0.2.0] - 2026-07-24
 
 ### Added

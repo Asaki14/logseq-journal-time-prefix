@@ -22,6 +22,23 @@ export function stripTimePrefix(title: string): string {
   return title.replace(TIME_PREFIX_PATTERN, '')
 }
 
+// Chromium applies a browser-driven insertion (an IME commit, a paste) at the
+// caret the `beforeinput` listener moved, but then places the caret using the
+// target range it captured before that listener ran. The caret therefore lands
+// `prefixLength` characters early, which for a short insertion is inside the
+// prefix itself: `[12:|30] 今天`. Returns the corrected caret, or null when the
+// browser already positioned it correctly.
+export function caretAfterPrefixInsertion(
+  value: string,
+  caret: number,
+  prefixLength: number,
+  valueLengthWithPrefix: number,
+): number | null {
+  const insertedLength = value.length - valueLengthWithPrefix
+  if (insertedLength < 0 || caret !== insertedLength) return null
+  return caret + prefixLength
+}
+
 export function isContentInsertion(inputType: unknown): boolean {
   if (typeof inputType !== 'string') return true
   return inputType.startsWith('insert') &&
