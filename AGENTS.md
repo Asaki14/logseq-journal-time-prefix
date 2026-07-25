@@ -23,12 +23,16 @@ Use the `package.json` scripts, not raw `tsc`/`vite`/`vitest`:
 
 ## Verifying editor behavior live
 
+The maintainer runs this plugin from his own clone at `~/logseq/plugins/logseq-journal-time-prefix`, built in place — that is his live testing surface. Never edit or build there, never attach to or restart his running Logseq, and never touch his graph or `~/.logseq`.
+
 Caret, IME and duplicate-prefix behavior cannot be settled by Vitest — those bugs live in the real editor. Drive an isolated desktop Logseq instead of the user's:
 
 ```bash
 HOME=<scratch> CFFIXED_USER_HOME=<scratch> /Applications/Logseq.app/Contents/MacOS/Logseq \
   --user-data-dir=<scratch>/electron-data --remote-debugging-port=9333
 ```
+
+Both `HOME` and `CFFIXED_USER_HOME` are required: with `HOME` alone the throwaway instance still loaded the user's plugins and rewrote their plugin settings.
 
 It opens a throwaway DB `Demo` graph. Talk to it over CDP (`http://127.0.0.1:9333/json/list`, one `page` target; Node's global `WebSocket` is enough). Load the working copy without any file dialog: `LSPluginCore.register({url: '<repo path>'})`, and later `LSPluginCore.reload(['journal-time-prefix'])`, `enable`/`disable`. `LSPluginCore` and `logseq.api` are globals on the host page; the plugin iframe is `document.getElementById('journal-time-prefix_iframe').contentWindow` and is same-origin, so its `logseq.updateSettings({...})` can drive settings.
 Type with `Input.dispatchKeyEvent`; reproduce IME with `Input.imeSetComposition` followed by `Input.insertText`. Never point any of this at `~/logseq`, `~/.logseq` or the user's running Logseq.
@@ -40,6 +44,7 @@ Tag-driven: `.github/workflows/publish.yml` fires on `v*` tags, runs `npm run ch
 Demonstrated shape (see `2bf0ae9`): feature commits carry their own `CHANGELOG.md` entries under `## [Unreleased]`; the release commit only bumps the version in `package.json` / `package-lock.json` and renames `## [Unreleased]` to `## [x.y.z] - YYYY-MM-DD`, with subject `chore: release vX.Y.Z`.
 
 Commit subjects follow Conventional Commits (`feat:`, `chore:`). Contributor flow is in `CONTRIBUTING.md`.
+Never add an agent or model name as a commit co-author — no `Co-Authored-By: Claude ...` trailer. One slipped onto the default branch through a squash merge.
 
 ## Maintaining this file
 
