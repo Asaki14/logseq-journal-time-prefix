@@ -24,6 +24,7 @@ import {
   setTimePrefixFormat,
   stripTimePrefix,
   titleHasExcludedTag,
+  titleIsSlashCommand,
 } from './time-prefix'
 
 const settingsSchema: SettingSchemaDesc[] = [
@@ -230,6 +231,8 @@ async function blockIsExcluded(
   block: BlockEntity,
   settings = getSettings(),
 ): Promise<boolean> {
+  if (titleIsSlashCommand(block.title)) return true
+
   const excludedByTag = await blockHasExcludedTag(
     block,
     settings.excludedTags,
@@ -340,6 +343,7 @@ function titleIsExcluded(
   settings: PrefixSettings,
 ): boolean {
   if (context.excludedBySection || context.excludedByTag) return true
+  if (titleIsSlashCommand(title)) return true
   if (titleHasExcludedTag(title, settings.excludedTags)) return true
 
   const heading = markdownHeading(title)
@@ -363,13 +367,17 @@ function removeLivePrefix(textarea: HTMLTextAreaElement): boolean {
 function prefixLiveEditor(
   target: EventTarget | null,
   requireContent: boolean,
+  pendingInsertion = '',
 ): boolean {
   const textarea = getTextarea(target)
   const context = textarea ? journalEditors.get(textarea) : undefined
   if (!textarea || !context) return false
 
   const settings = getSettings()
-  if (titleIsExcluded(textarea.value, context, settings)) {
+  // On `beforeinput` the character has not been inserted yet, so exclusion has
+  // to judge the value the block is about to have. That path only runs on an
+  // otherwise blank block, so prepending the insertion is enough to decide it.
+  if (titleIsExcluded(pendingInsertion + textarea.value, context, settings)) {
     return removeLivePrefix(textarea)
   }
 
@@ -482,7 +490,8 @@ function onBeforeEditorInput(event: Event): void {
   // Ordinary keyboard input can receive its prefix before the character is
   // inserted. IME input must wait until compositionend to avoid placing the
   // prefix inside the active composition range.
-  prefixLiveEditor(event.target, false)
+  const data = 'data' in event && typeof event.data === 'string' ? event.data : ''
+  prefixLiveEditor(event.target, false, data)
 }
 
 function onEditorInput(event: Event): void {

@@ -45,6 +45,8 @@ Configure these fields in the plugin settings:
 
 Leave both fields empty to preserve the original behavior. The plugin still only processes journal pages, not regular pages.
 
+One exclusion needs no configuration: a block whose content starts with `/` never gets a prefix, so Logseq's slash-command menu keeps working. The prefix is not added back after the command runs — type a character before opening the menu if that block should carry a timestamp.
+
 ## Installation
 
 1. Open the [latest release](https://github.com/Asaki14/logseq-journal-time-prefix/releases/latest).
