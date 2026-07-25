@@ -7,6 +7,7 @@ All notable changes to this project are documented here.
 ### Documentation
 
 - Add a demo GIF of the prefix appearing while typing in a journal block and embed it in both README language sections, plus a short usage section in each.
+- Split the bilingual README into an English-only `README.md` and a Chinese-only `README.zh-CN.md`, cross-linked at the top; both files ship in the release ZIP.
 
 ## [0.3.0] - 2026-07-25
 
