@@ -17,10 +17,24 @@
 - 二级及更深层级的 block 不添加时间。
 - 仅在空 block 第一次输入内容时添加时间。
 - 支持普通键盘输入、粘贴和中文 IME 组合输入。
-- 已有 `[HH:mm] ` 前缀时不会重复添加。
+- 已有前缀时不会重复添加。
 - 时间取自操作系统本地时区。
+- 时间两侧的括号可自定义，也可以完全去掉。
 - 可按完整标题名排除 section：标题本身到下一个同级或更高级标题之间均不添加时间。
 - 可按标签排除 block 及其子树。
+
+### 前缀格式
+
+在插件设置中配置 `Time prefix format / 时间前缀格式`：
+
+- `{time}` 代表 24 小时制 `HH:mm`，时间格式本身不可改。
+- 默认 `[{time}] `，即 `[14:32] `。
+- 其他写法：`({time}) ` → `(14:32) `；`【{time}】` → `【14:32】`；`{time} ` → `14:32 `（不加括号）。
+- 不含 `{time}` 的取值会被忽略，回退到默认格式。
+
+识别规则随设置变化，同时始终识别默认的 `[HH:mm] ` 前缀，因此改格式不会给已有 block 再加一个前缀。反之，自定义格式写下的旧 block 只在该格式仍生效时才被识别，建议选定一种格式后不要频繁更换。
+
+不加括号时无法区分插件写入的 `14:32 ` 和你手写的 `09:00 开会`：这类 block 会被当作已有前缀而跳过，不会重复加时间。
 
 ### 排除规则
 
@@ -76,10 +90,24 @@ A lightweight plugin for **Logseq DB graphs**. When you first enter content in a
 - Nested blocks at level 2 or deeper are ignored.
 - Adds a prefix only when an empty block receives its first content.
 - Supports regular keyboard input, paste, and Chinese IME composition.
-- Never duplicates an existing `[HH:mm] ` prefix.
+- Never duplicates an existing prefix.
 - Uses the operating system’s local time zone.
+- The brackets around the time are configurable and can be removed entirely.
 - Can exclude a section by its exact heading title, through the next heading of the same or higher level.
 - Can exclude a tagged block and its subtree.
+
+### Prefix format
+
+Configure `Time prefix format / 时间前缀格式` in the plugin settings:
+
+- `{time}` stands for the 24-hour `HH:mm` time; the time format itself is fixed.
+- The default is `[{time}] `, which produces `[14:32] `.
+- Other examples: `({time}) ` → `(14:32) `; `【{time}】` → `【14:32】`; `{time} ` → `14:32 ` (no brackets).
+- A value without `{time}` is ignored and the default format is used.
+
+Detection follows the configured format and always also recognizes the built-in `[HH:mm] ` prefix, so changing the format never adds a second prefix to existing blocks. The reverse is not true: blocks written with a custom format are only recognized while that format is configured, so pick one format and keep it.
+
+Without brackets the plugin cannot tell its own `14:32 ` apart from a hand-written `09:00 standup`. Such blocks count as already prefixed and are skipped, so no duplicate time is added.
 
 ### Exclusion rules
 

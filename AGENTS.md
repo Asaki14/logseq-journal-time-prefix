@@ -1,6 +1,6 @@
 # Project agent memory
 
-Logseq plugin that prefixes `[HH:mm] ` onto top-level blocks directly under a journal page.
+Logseq plugin that prefixes a local time (`[HH:mm] ` by default, format configurable) onto top-level blocks directly under a journal page.
 It targets **DB graphs only** — `package.json` declares `logseq.unsupportedGraphType: "file"`, so file-graph code paths are out of scope, not merely untested.
 
 ## Commands
@@ -19,6 +19,18 @@ Use the `package.json` scripts, not raw `tsc`/`vite`/`vitest`:
 - Entry point: `package.json` `main` points at `dist/index.html`, which Vite generates from the root `index.html`. `dist/` and `release/` are gitignored build output — never hand-edit or commit them.
 - `src/time-prefix.ts` holds the pure exported helpers and is what `src/time-prefix.test.ts` covers. `src/main.ts` is Logseq runtime wiring (settings schema, editor and DB event handlers) and has no tests. Put new logic in a pure helper so it is testable, and keep `main.ts` thin.
 - User-facing settings come from `settingsSchema` in `src/main.ts`; the README documents them in both Chinese and English, so a behavior change usually touches both language sections.
+
+## Verifying editor behavior live
+
+Caret, IME and duplicate-prefix behavior cannot be settled by Vitest — those bugs live in the real editor. Drive an isolated desktop Logseq instead of the user's:
+
+```bash
+HOME=<scratch> CFFIXED_USER_HOME=<scratch> /Applications/Logseq.app/Contents/MacOS/Logseq \
+  --user-data-dir=<scratch>/electron-data --remote-debugging-port=9333
+```
+
+It opens a throwaway DB `Demo` graph. Talk to it over CDP (`http://127.0.0.1:9333/json/list`, one `page` target; Node's global `WebSocket` is enough). Load the working copy without any file dialog: `LSPluginCore.register({url: '<repo path>'})`, and later `LSPluginCore.reload(['journal-time-prefix'])`, `enable`/`disable`. `LSPluginCore` and `logseq.api` are globals on the host page; the plugin iframe is `document.getElementById('journal-time-prefix_iframe').contentWindow` and is same-origin, so its `logseq.updateSettings({...})` can drive settings.
+Type with `Input.dispatchKeyEvent`; reproduce IME with `Input.imeSetComposition` followed by `Input.insertText`. Never point any of this at `~/logseq`, `~/.logseq` or the user's running Logseq.
 
 ## Release convention
 

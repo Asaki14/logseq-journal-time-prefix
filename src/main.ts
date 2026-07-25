@@ -5,8 +5,10 @@ import type {
   SettingSchemaDesc,
 } from '@logseq/libs/dist/LSPlugin'
 import {
+  caretAfterPrefixInsertion,
   changedFromEmpty,
   compareBlockOrder,
+  DEFAULT_TIME_PREFIX_FORMAT,
   formatTimePrefix,
   getHeading,
   hasTimePrefix,
@@ -16,13 +18,23 @@ import {
   isJournalPage,
   isTopLevelBlock,
   markdownHeading,
+  matchTimePrefix,
   normalizeTag,
   parseListSetting,
+  setTimePrefixFormat,
   stripTimePrefix,
   titleHasExcludedTag,
 } from './time-prefix'
 
 const settingsSchema: SettingSchemaDesc[] = [
+  {
+    key: 'timePrefixFormat',
+    type: 'string',
+    default: DEFAULT_TIME_PREFIX_FORMAT,
+    title: 'Time prefix format / 时间前缀格式',
+    description:
+      '`{time}` stands for the 24-hour `HH:mm` time. Examples: `[{time}] `, `({time}) `, `【{time}】`, or `{time} ` for no brackets. Blocks already written as `[HH:mm] ` stay recognized. / `{time}` 代表 24 小时制 `HH:mm`。例如 `[{time}] `、`({time}) `、`【{time}】`，或 `{time} ` 表示不加括号。已写成 `[HH:mm] ` 的 block 仍会被识别。',
+  },
   {
     key: 'excludedHeadingTitles',
     type: 'string',
@@ -61,6 +73,14 @@ const processingBlocks = new Set<string>()
 const journalPageCache = new Map<number, boolean>()
 const journalEditors = new WeakMap<HTMLTextAreaElement, EditorContext>()
 const syntheticEditorUpdates = new WeakSet<HTMLTextAreaElement>()
+const pendingCaretRepairs = new WeakMap<
+  HTMLTextAreaElement,
+  { prefixLength: number; valueLength: number }
+>()
+
+function applyTimePrefixFormat(): void {
+  setTimePrefixFormat(logseq.settings?.timePrefixFormat)
+}
 
 function getSettings(): PrefixSettings {
   return {
@@ -334,7 +354,7 @@ function titleIsExcluded(
 }
 
 function removeLivePrefix(textarea: HTMLTextAreaElement): boolean {
-  const prefix = textarea.value.match(/^\[\d{2}:\d{2}\]\s/)?.[0]
+  const prefix = matchTimePrefix(textarea.value)
   if (!prefix) return false
   textarea.setRangeText('', 0, prefix.length, 'preserve')
   return true
@@ -371,13 +391,40 @@ function prefixLiveEditor(
   // re-entering/repositioning the editor through async plugin APIs. Before an
   // ordinary character is inserted, move the caret behind the prefix; keeping
   // it at position 0 would produce `character[prefix]` and trigger a duplicate.
-  textarea.setRangeText(
-    formatTimePrefix(new Date()),
-    0,
-    0,
-    requireContent ? 'preserve' : 'end',
-  )
+  const prefix = formatTimePrefix(new Date())
+  textarea.setRangeText(prefix, 0, 0, requireContent ? 'preserve' : 'end')
+
+  if (!requireContent) {
+    // The browser still has to apply the insertion this event announced, and it
+    // may place the caret as if the prefix were not there. Let the following
+    // input event verify where the caret actually landed.
+    pendingCaretRepairs.set(textarea, {
+      prefixLength: prefix.length,
+      valueLength: textarea.value.length,
+    })
+  }
   return true
+}
+
+function repairPrefixCaret(textarea: HTMLTextAreaElement): void {
+  const pending = pendingCaretRepairs.get(textarea)
+  if (!pending) return
+  pendingCaretRepairs.delete(textarea)
+
+  if (
+    textarea.selectionStart !== textarea.selectionEnd ||
+    !hasTimePrefix(textarea.value)
+  ) {
+    return
+  }
+
+  const caret = caretAfterPrefixInsertion(
+    textarea.value,
+    textarea.selectionStart,
+    pending.prefixLength,
+    pending.valueLength,
+  )
+  if (caret !== null) textarea.setSelectionRange(caret, caret)
 }
 
 function dispatchSyntheticEditorInput(textarea: HTMLTextAreaElement): void {
@@ -439,9 +486,11 @@ function onBeforeEditorInput(event: Event): void {
 }
 
 function onEditorInput(event: Event): void {
-  if ('isComposing' in event && event.isComposing === true) return
   const textarea = getTextarea(event.target)
   if (!textarea) return
+
+  repairPrefixCaret(textarea)
+  if ('isComposing' in event && event.isComposing === true) return
   if (syntheticEditorUpdates.delete(textarea)) return
 
   prefixLiveEditor(textarea, true)
@@ -470,6 +519,8 @@ async function main(): Promise<void> {
     return
   }
 
+  applyTimePrefixFormat()
+
   logseq.DB.onChanged(({ blocks, txData }) => {
     for (const block of blocks) {
       if (changedFromEmpty(block, txData)) {
@@ -487,6 +538,7 @@ async function main(): Promise<void> {
   void rememberJournalEditor(hostDocument.activeElement)
 
   const removeSettingsListener = logseq.onSettingsChanged(() => {
+    applyTimePrefixFormat()
     void rememberJournalEditor(hostDocument.activeElement)
   })
 
