@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## [Unreleased]
+
+### Documentation
+
+- Add a demo GIF of the prefix appearing while typing in a journal block and embed it in both README language sections, plus a short usage section in each.
+
 ## [0.3.0] - 2026-07-25
 
 ### Added

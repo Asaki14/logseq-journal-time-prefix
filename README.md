@@ -10,6 +10,8 @@
 [14:32] 今天完成了……
 ```
 
+![在 Journal 页面输入时自动加上时间前缀，最后一条使用自定义格式 `({time}) `](https://raw.githubusercontent.com/Asaki14/logseq-journal-time-prefix/main/docs/demo.gif)
+
 ### 行为
 
 - 仅支持 DB graph，不支持 file graph。
@@ -58,6 +60,14 @@
 
 更新时下载新版 Release ZIP，替换旧文件夹，然后在 Logseq 中 Reload 插件。
 
+### 使用
+
+1. 打开今天的 Journal 页面。
+2. 在 Journal 直属的一级 block 里输入第一个字符，时间前缀自动出现，光标停在前缀之后，继续输入即可。
+3. 需要改前缀样式或排除某些内容时，在 `Plugins` → `Journal Time Prefix` → `Settings` 里调整上面几项设置。
+
+插件没有命令和快捷键，安装后即生效。
+
 ### 开发
 
 要求 Node.js 20 或更高版本。
@@ -82,6 +92,8 @@ A lightweight plugin for **Logseq DB graphs**. When you first enter content in a
 ```text
 [14:32] Finished today’s task…
 ```
+
+![Typing in a journal page adds the time prefix; the last block uses the custom format `({time}) `](https://raw.githubusercontent.com/Asaki14/logseq-journal-time-prefix/main/docs/demo.gif)
 
 ### Behavior
 
@@ -129,6 +141,14 @@ Leave both fields empty to preserve the original behavior. The plugin still only
 
 To update, replace the old folder with the folder from the latest release and reload the plugin in Logseq.
 
+### Usage
+
+1. Open today’s journal page.
+2. Type the first character in a top-level block directly under the journal. The time prefix appears and the caret stays behind it, so you can keep typing.
+3. To change the prefix style or exclude some content, adjust the settings above under `Plugins` → `Journal Time Prefix` → `Settings`.
+
+The plugin has no commands or keybindings; it works as soon as it is installed.
+
 ### Development
 
 Node.js 20 or later is required.
@@ -137,6 +157,14 @@ Node.js 20 or later is required.
 npm ci
 npm run check
 ```
+
+Continuous build:
+
+```bash
+npm run dev
+```
+
+After changing the sources run `npm run build`, then reload the plugin in Logseq.
 
 ## License
 
