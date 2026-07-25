@@ -4,6 +4,10 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Do not prefix a block whose content starts with `/`, so Logseq's slash-command menu keeps working in a journal. Logseq only opens the menu when the `/` starts the block or follows whitespace, so a prefix format without a trailing space (`【14:32】/`) suppressed the menu entirely; with the default `[14:32] ` the menu still opened, but the timestamp stayed behind as stray text after the command ran. The prefix is not added back later, so type a character before the command when a block needs a timestamp.
+
 ### Documentation
 
 - Add a demo GIF of the prefix appearing while typing in a journal block and embed it in both README language sections, plus a short usage section in each.

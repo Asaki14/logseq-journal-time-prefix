@@ -199,6 +199,15 @@ export function headingTitleIsExcluded(
   )
 }
 
+// Logseq opens its slash-command menu when `/` starts the block or follows
+// whitespace, so a prefix whose format does not end in a space (`【14:32】/`)
+// leaves the menu unreachable, and even the default `[14:32] ` prefix survives
+// the command as stray text. Leading whitespace is a valid trigger position for
+// Logseq, so ` /` counts as a command here as well.
+export function titleIsSlashCommand(title: string): boolean {
+  return stripTimePrefix(title).trimStart().startsWith('/')
+}
+
 export function normalizeTag(tag: string): string {
   return tag
     .trim()

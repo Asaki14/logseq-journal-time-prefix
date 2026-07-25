@@ -20,6 +20,7 @@ import {
   setTimePrefixFormat,
   stripTimePrefix,
   titleHasExcludedTag,
+  titleIsSlashCommand,
 } from './time-prefix'
 
 afterEach(() => {
@@ -253,5 +254,29 @@ describe('tag exclusions', () => {
     expect(titleHasExcludedTag('skip #[[No Time]]', ['#no time'])).toBe(true)
     expect(titleHasExcludedTag('keep #no-timer', ['no-time'])).toBe(false)
     expect(titleHasExcludedTag('[09:07] #no-time item', ['no-time'])).toBe(true)
+  })
+})
+
+describe('slash command exclusion', () => {
+  it('excludes a block whose content starts with a slash', () => {
+    expect(titleIsSlashCommand('/')).toBe(true)
+    expect(titleIsSlashCommand('/todo')).toBe(true)
+  })
+
+  it('treats leading whitespace as a command trigger, like Logseq does', () => {
+    expect(titleIsSlashCommand(' /')).toBe(true)
+    expect(titleIsSlashCommand('\t/query')).toBe(true)
+  })
+
+  it('keeps blocks that only contain a slash later on', () => {
+    expect(titleIsSlashCommand('')).toBe(false)
+    expect(titleIsSlashCommand('a /')).toBe(false)
+    expect(titleIsSlashCommand('and/or')).toBe(false)
+  })
+
+  it('sees through a prefix that was already inserted', () => {
+    expect(titleIsSlashCommand('[09:07] /todo')).toBe(true)
+    setTimePrefixFormat('【{time}】')
+    expect(titleIsSlashCommand('【09:07】/todo')).toBe(true)
   })
 })
