@@ -25,7 +25,7 @@ jobs:
         run: |
           mkdir -p release/logseq-journal-time-prefix
           cp -R dist release/logseq-journal-time-prefix/
-          cp package.json README.md LICENSE CHANGELOG.md icon.svg release/logseq-journal-time-prefix/
+          cp package.json README.md README.zh-CN.md LICENSE CHANGELOG.md icon.svg release/logseq-journal-time-prefix/
           cd release
           zip -r "logseq-journal-time-prefix-${VERSION}.zip" logseq-journal-time-prefix
       - name: Create GitHub Release

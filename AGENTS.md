@@ -18,7 +18,8 @@ Use the `package.json` scripts, not raw `tsc`/`vite`/`vitest`:
 - Plugin manifest: the `logseq` field in `package.json` (id, title, icon, graph support). There is no separate manifest file.
 - Entry point: `package.json` `main` points at `dist/index.html`, which Vite generates from the root `index.html`. `dist/` and `release/` are gitignored build output — never hand-edit or commit them.
 - `src/time-prefix.ts` holds the pure exported helpers and is what `src/time-prefix.test.ts` covers. `src/main.ts` is Logseq runtime wiring (settings schema, editor and DB event handlers) and has no tests. Put new logic in a pure helper so it is testable, and keep `main.ts` thin.
-- User-facing settings come from `settingsSchema` in `src/main.ts`; the README documents them in both Chinese and English, so a behavior change usually touches both language sections.
+- Docs are split by language: `README.md` is English only, `README.zh-CN.md` is Chinese only, and each links to the other at the top. Both carry the full content — neither is a stub — so a user-facing change usually touches both files.
+- User-facing settings come from `settingsSchema` in `src/main.ts` and are documented in both README files.
 
 ## Verifying editor behavior live
 
@@ -34,7 +35,7 @@ Type with `Input.dispatchKeyEvent`; reproduce IME with `Input.imeSetComposition`
 
 ## Release convention
 
-Tag-driven: `.github/workflows/publish.yml` fires on `v*` tags, runs `npm run check`, zips `dist/` plus `package.json README.md LICENSE CHANGELOG.md icon.svg`, and creates the GitHub Release.
+Tag-driven: `.github/workflows/publish.yml` fires on `v*` tags, runs `npm run check`, zips `dist/` plus `package.json README.md README.zh-CN.md LICENSE CHANGELOG.md icon.svg`, and creates the GitHub Release.
 
 Demonstrated shape (see `2bf0ae9`): feature commits carry their own `CHANGELOG.md` entries under `## [Unreleased]`; the release commit only bumps the version in `package.json` / `package-lock.json` and renames `## [Unreleased]` to `## [x.y.z] - YYYY-MM-DD`, with subject `chore: release vX.Y.Z`.
 
