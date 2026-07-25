@@ -8,6 +8,7 @@ import {
   caretAfterPrefixInsertion,
   changedFromEmpty,
   compareBlockOrder,
+  DEFAULT_TIME_PREFIX_FORMAT,
   formatTimePrefix,
   getHeading,
   hasTimePrefix,
@@ -17,13 +18,23 @@ import {
   isJournalPage,
   isTopLevelBlock,
   markdownHeading,
+  matchTimePrefix,
   normalizeTag,
   parseListSetting,
+  setTimePrefixFormat,
   stripTimePrefix,
   titleHasExcludedTag,
 } from './time-prefix'
 
 const settingsSchema: SettingSchemaDesc[] = [
+  {
+    key: 'timePrefixFormat',
+    type: 'string',
+    default: DEFAULT_TIME_PREFIX_FORMAT,
+    title: 'Time prefix format / 时间前缀格式',
+    description:
+      '`{time}` stands for the 24-hour `HH:mm` time. Examples: `[{time}] `, `({time}) `, `【{time}】`, or `{time} ` for no brackets. Blocks already written as `[HH:mm] ` stay recognized. / `{time}` 代表 24 小时制 `HH:mm`。例如 `[{time}] `、`({time}) `、`【{time}】`，或 `{time} ` 表示不加括号。已写成 `[HH:mm] ` 的 block 仍会被识别。',
+  },
   {
     key: 'excludedHeadingTitles',
     type: 'string',
@@ -66,6 +77,10 @@ const pendingCaretRepairs = new WeakMap<
   HTMLTextAreaElement,
   { prefixLength: number; valueLength: number }
 >()
+
+function applyTimePrefixFormat(): void {
+  setTimePrefixFormat(logseq.settings?.timePrefixFormat)
+}
 
 function getSettings(): PrefixSettings {
   return {
@@ -339,7 +354,7 @@ function titleIsExcluded(
 }
 
 function removeLivePrefix(textarea: HTMLTextAreaElement): boolean {
-  const prefix = textarea.value.match(/^\[\d{2}:\d{2}\]\s/)?.[0]
+  const prefix = matchTimePrefix(textarea.value)
   if (!prefix) return false
   textarea.setRangeText('', 0, prefix.length, 'preserve')
   return true
@@ -504,6 +519,8 @@ async function main(): Promise<void> {
     return
   }
 
+  applyTimePrefixFormat()
+
   logseq.DB.onChanged(({ blocks, txData }) => {
     for (const block of blocks) {
       if (changedFromEmpty(block, txData)) {
@@ -521,6 +538,7 @@ async function main(): Promise<void> {
   void rememberJournalEditor(hostDocument.activeElement)
 
   const removeSettingsListener = logseq.onSettingsChanged(() => {
+    applyTimePrefixFormat()
     void rememberJournalEditor(hostDocument.activeElement)
   })
 

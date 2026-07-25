@@ -1,25 +1,69 @@
 import type { BlockEntity, IDatom, PageEntity } from '@logseq/libs/dist/LSPlugin'
 
-const TIME_PREFIX_PATTERN = /^\[\d{2}:\d{2}\]\s/
+// Blocks written before the format became configurable always use this shape,
+// so it stays part of prefix detection whatever the current format is.
+const LEGACY_TIME_PREFIX_PATTERN = /^\[\d{2}:\d{2}\]\s/
 const MARKDOWN_HEADING_PATTERN = /^(#{1,6})(?:\s+(.*)|\s*)$/
 const TAG_BOUNDARY_PATTERN = /[\s,.;:!?，。；：！？、()[\]{}]/u
+
+const TIME_PLACEHOLDER = '{time}'
+const TIME_PATTERN_SOURCE = '\\d{2}:\\d{2}'
+
+export const DEFAULT_TIME_PREFIX_FORMAT = '[{time}] '
 
 type BlockLike = Pick<BlockEntity, 'uuid' | 'title'> &
   Partial<Pick<BlockEntity, 'properties'>> &
   Record<string, unknown>
 
+function escapeForRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+}
+
+function buildTimePrefixPattern(format: string): RegExp {
+  const placeholder = format.indexOf(TIME_PLACEHOLDER)
+  const before = escapeForRegExp(format.slice(0, placeholder))
+  const after = escapeForRegExp(
+    format.slice(placeholder + TIME_PLACEHOLDER.length),
+  )
+  return new RegExp(`^${before}${TIME_PATTERN_SOURCE}${after}`)
+}
+
+export function parseTimePrefixFormat(value: unknown): string {
+  return typeof value === 'string' && value.includes(TIME_PLACEHOLDER)
+    ? value
+    : DEFAULT_TIME_PREFIX_FORMAT
+}
+
+let timePrefixFormat = DEFAULT_TIME_PREFIX_FORMAT
+let timePrefixPattern = buildTimePrefixPattern(DEFAULT_TIME_PREFIX_FORMAT)
+
+export function setTimePrefixFormat(value: unknown): string {
+  timePrefixFormat = parseTimePrefixFormat(value)
+  timePrefixPattern = buildTimePrefixPattern(timePrefixFormat)
+  return timePrefixFormat
+}
+
 export function formatTimePrefix(date: Date): string {
   const hours = String(date.getHours()).padStart(2, '0')
   const minutes = String(date.getMinutes()).padStart(2, '0')
-  return `[${hours}:${minutes}] `
+  return timePrefixFormat.replace(TIME_PLACEHOLDER, `${hours}:${minutes}`)
+}
+
+// Detection has to cover the configured format and the built-in one, otherwise
+// changing the format would add a second prefix to every existing block.
+export function matchTimePrefix(title: string): string | null {
+  const match =
+    timePrefixPattern.exec(title) ?? LEGACY_TIME_PREFIX_PATTERN.exec(title)
+  return match?.[0] ?? null
 }
 
 export function hasTimePrefix(title: string): boolean {
-  return TIME_PREFIX_PATTERN.test(title)
+  return matchTimePrefix(title) !== null
 }
 
 export function stripTimePrefix(title: string): string {
-  return title.replace(TIME_PREFIX_PATTERN, '')
+  const prefix = matchTimePrefix(title)
+  return prefix === null ? title : title.slice(prefix.length)
 }
 
 // Chromium applies a browser-driven insertion (an IME commit, a paste) at the
