@@ -12,7 +12,7 @@ A lightweight plugin for **Logseq DB graphs**. When you first enter content in a
 
 ## Behavior
 
-- Supports DB graphs only; file graphs are not supported.
+- Supports DB graphs only. Logseq still lets you enable it on a file graph, where the plugin warns once and stays inactive.
 - Only prefixes top-level blocks directly under journal pages.
 - Nested blocks at level 2 or deeper are ignored.
 - Adds a prefix only when an empty block receives its first content.
@@ -48,6 +48,12 @@ Leave both fields empty to preserve the original behavior. The plugin still only
 One exclusion needs no configuration: a block whose content starts with `/` never gets a prefix, so Logseq's slash-command menu keeps working. The prefix is not added back after the command runs — type a character before opening the menu if that block should carry a timestamp.
 
 ## Installation
+
+### From the Logseq marketplace
+
+Open `Plugins` → `Marketplace`, search for `Journal Time Prefix` and install it. Versions up to 0.3.1 added the prefix only after a block was committed when installed this way; update to 0.3.2 or later to get the prefix while typing.
+
+### From a GitHub release
 
 1. Open the [latest release](https://github.com/Asaki14/logseq-journal-time-prefix/releases/latest).
 2. Download `logseq-journal-time-prefix-v*.zip`. Do not download GitHub’s automatically generated `Source code` archives.

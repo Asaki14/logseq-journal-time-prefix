@@ -4,9 +4,11 @@ import type {
   PageEntity,
   SettingSchemaDesc,
 } from '@logseq/libs/dist/LSPlugin'
+import type { GraphSupport } from './time-prefix'
 import {
   caretAfterPrefixInsertion,
   changedFromEmpty,
+  classifyGraphSupport,
   compareBlockOrder,
   DEFAULT_TIME_PREFIX_FORMAT,
   formatTimePrefix,
@@ -70,6 +72,15 @@ interface EditorContext {
   excludedByTag: boolean
 }
 
+// Logseq answers the DB-graph question from the loaded graph, so the wait covers
+// the graph load rather than a fixed startup delay.
+const GRAPH_WAIT_INTERVAL_MS = 500
+const GRAPH_WAIT_ATTEMPTS = 60
+
+let started = false
+let startupPending = false
+let warnedUnsupported = false
+
 const processingBlocks = new Set<string>()
 const journalPageCache = new Map<number, boolean>()
 const journalEditors = new WeakMap<HTMLTextAreaElement, EditorContext>()
@@ -92,8 +103,20 @@ function getSettings(): PrefixSettings {
   }
 }
 
-function getHostDocument(): Document {
-  return window.parent.document
+// Reaching the host document needs the plugin iframe to be same-origin with the
+// host page, which Logseq only does for a plugin declaring root-level
+// `"effect": true` in its package.json. Without it an installed plugin is served
+// from `lsp://logseq.io` and this throws a SecurityError.
+function getHostDocument(): Document | null {
+  try {
+    return window.parent.document
+  } catch (error) {
+    console.error(
+      '[journal-time-prefix] Cannot reach the Logseq host document, so live-editor prefixing is disabled and only the committed-block fallback runs. Expected `"effect": true` at the root of the plugin package.json.',
+      error,
+    )
+    return null
+  }
 }
 
 function getTextarea(target: EventTarget | null): HTMLTextAreaElement | null {
@@ -518,16 +541,7 @@ function onEditorFocus(event: FocusEvent): void {
   void rememberJournalEditor(event.target)
 }
 
-async function main(): Promise<void> {
-  const isDbGraph = await logseq.App.checkCurrentIsDbGraph()
-  if (!isDbGraph) {
-    await logseq.UI.showMsg(
-      'Journal Time Prefix only supports Logseq DB graphs.',
-      'warning',
-    )
-    return
-  }
-
+async function start(): Promise<void> {
   applyTimePrefixFormat()
 
   logseq.DB.onChanged(({ blocks, txData }) => {
@@ -539,6 +553,16 @@ async function main(): Promise<void> {
   })
 
   const hostDocument = getHostDocument()
+  if (!hostDocument) {
+    // The fallback above is already wired up, so prefixes still appear once a
+    // block is committed. Say so instead of degrading silently, as v0.3.1 did.
+    await logseq.UI.showMsg(
+      'Journal Time Prefix: live typing support is unavailable, so a prefix only appears after a block is committed. Install the latest release to restore it.',
+      'warning',
+    )
+    return
+  }
+
   hostDocument.addEventListener('focusin', onEditorFocus, true)
   hostDocument.addEventListener('keydown', onEditorStructureKeydown, true)
   hostDocument.addEventListener('beforeinput', onBeforeEditorInput, true)
@@ -560,11 +584,61 @@ async function main(): Promise<void> {
     removeSettingsListener()
   })
 
+  console.info('[journal-time-prefix] Ready')
+}
+
+async function resolveGraphSupport(): Promise<GraphSupport> {
+  const [graph, isDbGraph] = await Promise.all([
+    logseq.App.getCurrentGraph(),
+    logseq.App.checkCurrentIsDbGraph(),
+  ])
+  return classifyGraphSupport(graph, isDbGraph)
+}
+
+// A plugin becomes ready before Logseq has loaded the graph, so the DB-graph
+// question stays unanswerable for a while. Keep asking until a graph exists
+// rather than exiting for the session on the first falsy answer.
+async function startWhenDbGraph(): Promise<void> {
+  if (started || startupPending) return
+  startupPending = true
+
+  try {
+    for (let attempt = 0; attempt < GRAPH_WAIT_ATTEMPTS; attempt += 1) {
+      const support = await resolveGraphSupport()
+      if (support === 'supported') {
+        started = true
+        await start()
+        return
+      }
+      if (support === 'unsupported') {
+        if (warnedUnsupported) return
+        warnedUnsupported = true
+        await logseq.UI.showMsg(
+          'Journal Time Prefix only supports Logseq DB graphs.',
+          'warning',
+        )
+        return
+      }
+      await new Promise((resolve) =>
+        window.setTimeout(resolve, GRAPH_WAIT_INTERVAL_MS),
+      )
+    }
+
+    console.warn(
+      '[journal-time-prefix] No graph loaded yet; waiting for a graph change',
+    )
+  } finally {
+    startupPending = false
+  }
+}
+
+async function main(): Promise<void> {
   logseq.App.onCurrentGraphChanged(() => {
     journalPageCache.clear()
+    void startWhenDbGraph()
   })
 
-  console.info('[journal-time-prefix] Ready')
+  await startWhenDbGraph()
 }
 
 logseq.ready(main).catch((error) => {

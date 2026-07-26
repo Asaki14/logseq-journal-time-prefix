@@ -1,7 +1,7 @@
 # Project agent memory
 
 Logseq plugin that prefixes a local time (`[HH:mm] ` by default, format configurable) onto top-level blocks directly under a journal page.
-It targets **DB graphs only** — `package.json` declares `logseq.unsupportedGraphType: "file"`, so file-graph code paths are out of scope, not merely untested.
+It targets **DB graphs only**, enforced solely by the runtime `logseq.App.checkCurrentIsDbGraph()` check in `src/main.ts`. `logseq.unsupportedGraphType: "file"` is declarative intent, not a gate: Logseq 2.0.1 never reads that field (zero hits in `app.asar` and in `@logseq/libs@0.2.11`), so it will happily enable the plugin on a file graph. File-graph code paths are still out of scope.
 
 ## Commands
 
@@ -15,7 +15,7 @@ Use the `package.json` scripts, not raw `tsc`/`vite`/`vitest`:
 
 ## Layout and sources of truth
 
-- Plugin manifest: the `logseq` field in `package.json` (id, title, icon, graph support). There is no separate manifest file.
+- Plugin manifest: the `logseq` field in `package.json` (id, title, icon, graph support). There is no separate manifest file. One exception matters: Logseq reads `effect` from the **root** of `package.json`, never from the `logseq` object. Root `"effect": true` is what keeps the plugin iframe same-origin with the host page (`lsp://logseq.com`) once installed, and `src/main.ts` needs that to reach the editor through `window.parent.document`. Dropping it silently costs every live-editor behavior; v0.3.1 shipped that way.
 - Entry point: `package.json` `main` points at `dist/index.html`, which Vite generates from the root `index.html`. `dist/` and `release/` are gitignored build output — never hand-edit or commit them.
 - `src/time-prefix.ts` holds the pure exported helpers and is what `src/time-prefix.test.ts` covers. `src/main.ts` is Logseq runtime wiring (settings schema, editor and DB event handlers) and has no tests. Put new logic in a pure helper so it is testable, and keep `main.ts` thin.
 - Docs are split by language: `README.md` is English only, `README.zh-CN.md` is Chinese only, and each links to the other at the top. Both carry the full content — neither is a stub — so a user-facing change usually touches both files.
@@ -29,13 +29,16 @@ Caret, IME and duplicate-prefix behavior cannot be settled by Vitest — those b
 
 ```bash
 HOME=<scratch> CFFIXED_USER_HOME=<scratch> /Applications/Logseq.app/Contents/MacOS/Logseq \
-  --user-data-dir=<scratch>/electron-data --remote-debugging-port=9333
+  --user-data-dir=<scratch>/electron-data --remote-debugging-port=<free port>
 ```
 
 Both `HOME` and `CFFIXED_USER_HOME` are required: with `HOME` alone the throwaway instance still loaded the user's plugins and rewrote their plugin settings.
 
-It opens a throwaway DB `Demo` graph. Talk to it over CDP (`http://127.0.0.1:9333/json/list`, one `page` target; Node's global `WebSocket` is enough). Load the working copy without any file dialog: `LSPluginCore.register({url: '<repo path>'})`, and later `LSPluginCore.reload(['journal-time-prefix'])`. Use `reload`, not `disable`/`enable`: re-enabling leaves the plugin listed as registered but its host-document listeners dead, so it silently stops prefixing and every later observation is worthless. `LSPluginCore` and `logseq.api` are globals on the host page; the plugin iframe is `document.getElementById('journal-time-prefix_iframe').contentWindow` and is same-origin, so its `logseq.updateSettings({...})` can drive settings.
-Type with `Input.dispatchKeyEvent` (`rawKeyDown` + `char` + `keyUp`; a `keyDown` carrying `text` plus a `char` inserts the character twice); reproduce IME with `Input.imeSetComposition` followed by `Input.insertText`. The live editor is `textarea[id^="edit-block-"]` and the slash-command menu is `.cp__commands-slash`; the journal page starts with no blocks, so click `.block-add-button` to get an empty top-level one. Never point any of this at `~/logseq`, `~/.logseq` or the user's running Logseq.
+**Verify in the shipped install shape, not only the dev one.** A marketplace install lands as a folder in `~/.logseq/plugins/`, and that is the shape that broke in v0.3.1 — dev registration cannot reveal it, because the two shapes resolve the iframe origin through different branches of Logseq's `_resolveResourceFullUrl`. Reproduce the real thing: `npm run build`, then assemble the folder exactly as `.github/workflows/publish.yml` zips it (`dist/` plus `package.json README.md README.zh-CN.md LICENSE CHANGELOG.md icon.svg`) into `<scratch>/.logseq/plugins/logseq-journal-time-prefix/` and cold start. No preferences entry is needed; Logseq discovers the folder. In this shape the plugin **id is the folder name** — the iframe is `#logseq-journal-time-prefix_iframe` and settings live at `<scratch>/.logseq/settings/logseq-journal-time-prefix.json`, not under `journal-time-prefix`. Two things to assert: the iframe `src` is on `lsp://logseq.com`, and a prefix appears **in the live textarea on the first character**, not merely in the committed block — a committed-only prefix means the host-document path is dead and the DB fallback is carrying it. Also cover the dev path (`lsp://logseq.com/external/…`), which is where the maintainer runs it.
+
+Load the working copy without any file dialog: `LSPluginCore.register({url: '<repo path>'})`, and later `LSPluginCore.reload(['<plugin id>'])` — `journal-time-prefix` when dev-registered, `logseq-journal-time-prefix` in a dot-root install. Use `reload`, not `disable`/`enable`: re-enabling leaves the plugin listed as registered but its host-document listeners dead, so it silently stops prefixing and every later observation is worthless. Reload does not re-fetch a changed `dist/assets/*.js` — Electron serves the cached module, so bump the version or rename the asset when the bundle content must change under a reload.
+
+Talk to the instance over CDP (`http://127.0.0.1:<port>/json/list`; Node's global `WebSocket` is enough). Both install shapes are same-origin with the host page, so the plugin iframe shares the single `page` target and `document.getElementById('<id>_iframe').contentWindow` reaches it — its `logseq.updateSettings({...})` can drive settings, and `console` output from the plugin arrives on that target's `Runtime.consoleAPICalled`. `LSPluginCore` and `logseq.api` are globals on the host page. Type with `Input.dispatchKeyEvent` (`rawKeyDown` + `char` + `keyUp`; a `keyDown` carrying `text` plus a `char` inserts the character twice); reproduce IME with `Input.imeSetComposition` followed by `Input.insertText`. The live editor is `textarea[id^="edit-block-"]` and the slash-command menu is `.cp__commands-slash`. Get an empty top-level block from the journals feed (`logseq.api.push_state('home')`, then click `.block-add-button`); navigating straight to the journal page by date renders nothing to click. Never point any of this at `~/logseq`, `~/.logseq` or the user's running Logseq.
 
 ## Release convention
 

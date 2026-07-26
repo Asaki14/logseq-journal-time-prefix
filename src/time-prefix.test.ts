@@ -3,6 +3,7 @@ import type { IDatom } from '@logseq/libs/dist/LSPlugin'
 import {
   caretAfterPrefixInsertion,
   changedFromEmpty,
+  classifyGraphSupport,
   compareBlockOrder,
   DEFAULT_TIME_PREFIX_FORMAT,
   formatTimePrefix,
@@ -163,6 +164,30 @@ describe('isJournalPage', () => {
     expect(isJournalPage({ type: 'page', 'journal?': true })).toBe(true)
     expect(isJournalPage({ type: 'page', 'journal?': false })).toBe(false)
     expect(isJournalPage(null)).toBe(false)
+  })
+})
+
+describe('classifyGraphSupport', () => {
+  it('waits instead of deciding while no graph is loaded', () => {
+    expect(classifyGraphSupport(null, false)).toBe('pending')
+    expect(classifyGraphSupport(undefined, undefined)).toBe('pending')
+    expect(classifyGraphSupport({}, false)).toBe('pending')
+  })
+
+  it('accepts a DB graph whatever the graph object looks like', () => {
+    expect(classifyGraphSupport(null, true)).toBe('supported')
+    expect(classifyGraphSupport({ url: 'logseq_db_Demo' }, true)).toBe(
+      'supported',
+    )
+  })
+
+  it('reports an unsupported graph only once one is loaded', () => {
+    expect(classifyGraphSupport({ url: 'logseq_local_/tmp/graph' }, false)).toBe(
+      'unsupported',
+    )
+    expect(classifyGraphSupport({ path: '/tmp/graph' }, false)).toBe(
+      'unsupported',
+    )
   })
 })
 
