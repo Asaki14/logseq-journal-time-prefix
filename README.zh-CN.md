@@ -12,7 +12,7 @@
 
 ## 行为
 
-- 仅支持 DB graph，不支持 file graph。
+- 仅支持 DB graph。在 file graph 上 Logseq 仍允许启用本插件，此时插件只提示一次并保持不生效。
 - 仅处理 Journal 页面直属的一级 block。
 - 二级及更深层级的 block 不添加时间。
 - 仅在空 block 第一次输入内容时添加时间。
@@ -48,6 +48,10 @@
 还有一条无需配置的排除规则：以 `/` 开头的 block 不加时间前缀，Logseq 的斜杠命令菜单因此可以正常使用。命令执行后也不会补加前缀——需要时间戳时，先输入一个字符再打开命令菜单。
 
 ## 安装
+
+### 从 Logseq 插件市场安装
+
+打开 `Plugins` → `Marketplace`，搜索 `Journal Time Prefix` 并安装。0.3.1 及更早版本以这种方式安装时只在 block 提交后才补上前缀，请升级到 0.3.2 或更高版本以恢复输入时即时加前缀。
 
 ### 从 GitHub Release 安装
 

@@ -127,6 +127,21 @@ export function changedFromEmpty(
   return addedNonEmptyTitle && !removedNonEmptyTitle
 }
 
+export type GraphSupport = 'supported' | 'unsupported' | 'pending'
+
+// `checkCurrentIsDbGraph()` answers false while the graph is still loading, and
+// at that point `getCurrentGraph()` is still null. Treating that first answer as
+// final kills the plugin for the whole session and shows a file-graph warning on
+// a DB graph, so a falsy answer only counts once a graph actually exists.
+export function classifyGraphSupport(
+  graph: { url?: string; path?: string } | null | undefined,
+  isDbGraph: unknown,
+): GraphSupport {
+  if (isDbGraph === true) return 'supported'
+  if (!graph?.url && !graph?.path) return 'pending'
+  return 'unsupported'
+}
+
 export function isJournalPage(
   page: Pick<PageEntity, 'type' | 'journal?' | 'journalDay'> | null,
 ): boolean {

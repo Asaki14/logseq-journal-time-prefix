@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here.
 
+## [0.3.2] - 2026-07-26
+
+### Fixed
+
+- Restore live typing support for installed copies of the plugin. Logseq reads `effect` from the root of `package.json`, not from the `logseq` object, so v0.3.1 was served from `lsp://logseq.io` once installed into `~/.logseq/plugins/`. Reaching the Logseq editor from there throws a `SecurityError`, which silently disabled the prefix while typing, the caret repair, IME handling and the live exclusion refresh; only the slower committed-block fallback kept working. `"effect": true` now sits at the root of `package.json`.
+- Report a failed host-document acquisition instead of degrading in silence: the plugin logs the cause and shows one warning that prefixes will only appear after a block is committed.
+- Do not give up when Logseq answers the DB-graph question before the graph has loaded. That answer arrives as "not a DB graph" with no graph loaded at all, and treating it as final left the plugin inactive for the whole session behind a warning that was wrong on a DB graph. The check now waits for a graph and re-runs after a graph change, so the warning only appears on a real file graph.
+
+### Documentation
+
+- Correct the claim that Logseq refuses to enable this plugin on a file graph. Logseq 2.0.1 does not read `unsupportedGraphType`; the runtime graph check is the only gate.
+
 ## [0.3.1] - 2026-07-25
 
 ### Fixed
