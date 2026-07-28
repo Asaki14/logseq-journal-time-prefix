@@ -5,6 +5,8 @@ import type {
   SettingSchemaDesc,
 } from '@logseq/libs/dist/LSPlugin'
 import type { GraphSupport } from './time-prefix'
+import type { PanelRow, PluginStatus } from './panel'
+import { panelRows } from './panel'
 import {
   caretAfterPrefixInsertion,
   changedFromEmpty,
@@ -80,6 +82,7 @@ const GRAPH_WAIT_ATTEMPTS = 60
 let started = false
 let startupPending = false
 let warnedUnsupported = false
+let pluginStatus: PluginStatus = 'pending'
 
 const processingBlocks = new Set<string>()
 const journalPageCache = new Map<number, boolean>()
@@ -587,6 +590,76 @@ async function start(): Promise<void> {
   console.info('[journal-time-prefix] Ready')
 }
 
+// The host renders the sidebar panel with its own React, exposed through
+// `logseq.Experiments.React` as `unknown`. Only these three members are used.
+interface HostReact {
+  createElement: (
+    type: string,
+    props: Record<string, unknown> | null,
+    ...children: unknown[]
+  ) => unknown
+  useState: <T>(initial: T) => [T, (next: T) => void]
+  useEffect: (effect: () => undefined | (() => void), deps: unknown[]) => void
+}
+
+function currentPanelRows(): PanelRow[] {
+  return panelRows(
+    pluginStatus,
+    logseq.settings?.timePrefixFormat,
+    formatTimePrefix(new Date()),
+  )
+}
+
+function renderPanelRow(React: HostReact, row: PanelRow): unknown {
+  return React.createElement(
+    'div',
+    { key: row.label, className: 'flex items-center justify-between gap-2' },
+    React.createElement('span', { className: 'opacity-60' }, row.label),
+    React.createElement('code', null, row.value),
+  )
+}
+
+function renderSidebarPanel(): unknown {
+  const React = logseq.Experiments.React as HostReact
+  const [rows, setRows] = React.useState(currentPanelRows())
+
+  React.useEffect(
+    () => logseq.onSettingsChanged(() => setRows(currentPanelRows())),
+    [],
+  )
+
+  return React.createElement(
+    'div',
+    { className: 'flex flex-col gap-2 text-sm' },
+    ...rows.map((row) => renderPanelRow(React, row)),
+    React.createElement(
+      'button',
+      {
+        className: 'button self-start',
+        onClick: () => logseq.showSettingsUI(),
+      },
+      'Open settings',
+    ),
+  )
+}
+
+// Registration reaches the host scope through `window.top`, which only works
+// while the plugin iframe is same-origin — the same `"effect": true` condition
+// the live-editor path depends on.
+function registerSidebarPanel(): void {
+  try {
+    logseq.Experiments.registerSidebarRenderer('status', {
+      title: 'Journal Time Prefix',
+      render: renderSidebarPanel,
+    })
+  } catch (error) {
+    console.error(
+      '[journal-time-prefix] Failed to register the right-sidebar panel',
+      error,
+    )
+  }
+}
+
 async function resolveGraphSupport(): Promise<GraphSupport> {
   const [graph, isDbGraph] = await Promise.all([
     logseq.App.getCurrentGraph(),
@@ -607,10 +680,12 @@ async function startWhenDbGraph(): Promise<void> {
       const support = await resolveGraphSupport()
       if (support === 'supported') {
         started = true
+        pluginStatus = 'active'
         await start()
         return
       }
       if (support === 'unsupported') {
+        pluginStatus = 'unsupported'
         if (warnedUnsupported) return
         warnedUnsupported = true
         await logseq.UI.showMsg(
@@ -633,6 +708,9 @@ async function startWhenDbGraph(): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  applyTimePrefixFormat()
+  registerSidebarPanel()
+
   logseq.App.onCurrentGraphChanged(() => {
     journalPageCache.clear()
     void startWhenDbGraph()

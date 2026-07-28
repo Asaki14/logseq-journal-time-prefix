@@ -47,6 +47,18 @@ Leave both fields empty to preserve the original behavior. The plugin still only
 
 One exclusion needs no configuration: a block whose content starts with `/` never gets a prefix, so Logseq's slash-command menu keeps working. The prefix is not added back after the command runs — type a character before opening the menu if that block should carry a timestamp.
 
+## Right sidebar panel
+
+Open the right sidebar, click the puzzle button in its top bar and pick `Journal Time Prefix`. The panel reports:
+
+- `Status`: whether the plugin is active on journal pages, still waiting for a graph, or inactive because the current graph is not a DB graph.
+- `Prefix format`: the format in effect, including the fallback to the default when the configured value is unusable.
+- `Next prefix`: the prefix the next block would receive.
+
+`Open settings` in the panel opens the plugin settings, where the format and both exclusion lists are edited. Changing a setting updates the panel immediately.
+
+Logseq 2.0.1 titles the sidebar item with the raw renderer key (`:logseq-journal-time-prefix/_sidebar.status`) rather than the registered title. That is a host-side label; the panel content is unaffected.
+
 ## Installation
 
 ### From the Logseq marketplace
