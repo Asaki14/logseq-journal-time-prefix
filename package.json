@@ -34,7 +34,7 @@
     "unsupportedGraphType": "file"
   },
   "devDependencies": {
-    "@logseq/libs": "0.2.11",
+    "@logseq/libs": "0.3.4",
     "typescript": "7.0.2",
     "vite": "8.1.5",
     "vitest": "4.1.10"
