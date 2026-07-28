@@ -49,7 +49,7 @@ One exclusion needs no configuration: a block whose content starts with `/` neve
 
 ## Toolbar button
 
-The plugin contributes a clock button to the toolbar's plugin area, next to Logseq's own settings button. Clicking it opens the plugin settings, where the format and both exclusion lists are edited.
+The plugin contributes a clock button to the toolbar's plugin area, next to Logseq's own settings button. Clicking it opens a compact settings popover under the button, styled with Logseq's own theme variables, where the format and both exclusion lists are edited. It shows the prefix the next block would receive, edits take effect as you type, and the popover closes on `Esc`, on a click outside it, or through its close button. `Full settings / 完整设置` opens Logseq's built-in settings panel, which edits exactly the same options.
 
 Logseq collects plugin buttons in the toolbar plugins popover, so open that popover and pin `Journal Time Prefix` to keep the button on the toolbar itself.
 
@@ -74,7 +74,7 @@ To update, replace the old folder with the folder from the latest release and re
 
 1. Open today’s journal page.
 2. Type the first character in a top-level block directly under the journal. The time prefix appears and the caret stays behind it, so you can keep typing.
-3. To change the prefix style or exclude some content, adjust the settings above under `Plugins` → `Journal Time Prefix` → `Settings`.
+3. To change the prefix style or exclude some content, click the toolbar clock button and edit the settings above in the popover, or open them under `Plugins` → `Journal Time Prefix` → `Settings`.
 
 The plugin has no commands or keybindings; it works as soon as it is installed.
 

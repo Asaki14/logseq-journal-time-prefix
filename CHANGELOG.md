@@ -7,6 +7,7 @@ All notable changes to this project are documented here.
 ### Added
 
 - Add a toolbar button through `logseq.App.registerUIItem('toolbar', …)`. It shows up in the toolbar's plugin area — pinnable from the toolbar plugins popover — and opens the plugin settings when clicked.
+- Add a settings popover of the plugin's own, opened by that toolbar button and anchored under it. It edits the same three settings the schema declares, previews the prefix the next block would receive, writes through `logseq.updateSettings` so an edit takes effect live, and closes on `Esc`, on an outside click or through its close button. Its styling comes from Logseq's theme variables, so it follows the active light or dark theme. The schema-driven settings panel stays registered and reachable from the popover's `Full settings / 完整设置`, and remains the fallback where the panel cannot be mounted.
 
 ### Changed
 
