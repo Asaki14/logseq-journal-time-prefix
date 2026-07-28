@@ -4,7 +4,11 @@ import type {
   PageEntity,
   SettingSchemaDesc,
 } from '@logseq/libs/dist/LSPlugin'
-import type { GraphSupport } from './time-prefix'
+import type {
+  EditorExclusionContext,
+  ExclusionSettings,
+  GraphSupport,
+} from './time-prefix'
 import type { PanelRow, PluginStatus } from './panel'
 import { panelRows } from './panel'
 import {
@@ -21,13 +25,13 @@ import {
   isInExcludedHeadingSection,
   isJournalPage,
   isTopLevelBlock,
-  markdownHeading,
   matchTimePrefix,
   normalizeTag,
   parseListSetting,
+  resolveLivePrefixAction,
   setTimePrefixFormat,
-  stripTimePrefix,
   titleHasExcludedTag,
+  titleIsExcluded,
   titleIsSlashCommand,
 } from './time-prefix'
 
@@ -62,16 +66,8 @@ const settingsSchema: SettingSchemaDesc[] = [
 
 logseq.useSettingsSchema(settingsSchema)
 
-interface PrefixSettings {
-  excludedHeadingTitles: string[]
-  excludedTags: string[]
-}
-
-interface EditorContext {
+interface EditorContext extends EditorExclusionContext {
   blockUuid: string
-  headingLevel: number | null
-  excludedBySection: boolean
-  excludedByTag: boolean
 }
 
 // Logseq answers the DB-graph question from the loaded graph, so the wait covers
@@ -88,6 +84,7 @@ const processingBlocks = new Set<string>()
 const journalPageCache = new Map<number, boolean>()
 const journalEditors = new WeakMap<HTMLTextAreaElement, EditorContext>()
 const syntheticEditorUpdates = new WeakSet<HTMLTextAreaElement>()
+const commandedEditors = new WeakSet<HTMLTextAreaElement>()
 const pendingCaretRepairs = new WeakMap<
   HTMLTextAreaElement,
   { prefixLength: number; valueLength: number }
@@ -97,7 +94,7 @@ function applyTimePrefixFormat(): void {
   setTimePrefixFormat(logseq.settings?.timePrefixFormat)
 }
 
-function getSettings(): PrefixSettings {
+function getSettings(): ExclusionSettings {
   return {
     excludedHeadingTitles: parseListSetting(
       logseq.settings?.excludedHeadingTitles,
@@ -363,26 +360,6 @@ async function rememberJournalEditor(
   }
 }
 
-function titleIsExcluded(
-  title: string,
-  context: EditorContext,
-  settings: PrefixSettings,
-): boolean {
-  if (context.excludedBySection || context.excludedByTag) return true
-  if (titleIsSlashCommand(title)) return true
-  if (titleHasExcludedTag(title, settings.excludedTags)) return true
-
-  const heading = markdownHeading(title)
-  const isHeading = context.headingLevel !== null || heading !== null
-  return Boolean(
-    isHeading &&
-      headingTitleIsExcluded(
-        heading?.title ?? stripTimePrefix(title).trim(),
-        settings.excludedHeadingTitles,
-      ),
-  )
-}
-
 function removeLivePrefix(textarea: HTMLTextAreaElement): boolean {
   const prefix = matchTimePrefix(textarea.value)
   if (!prefix) return false
@@ -399,26 +376,17 @@ function prefixLiveEditor(
   const context = textarea ? journalEditors.get(textarea) : undefined
   if (!textarea || !context) return false
 
-  const settings = getSettings()
-  // On `beforeinput` the character has not been inserted yet, so exclusion has
-  // to judge the value the block is about to have. That path only runs on an
-  // otherwise blank block, so prepending the insertion is enough to decide it.
-  if (titleIsExcluded(pendingInsertion + textarea.value, context, settings)) {
-    return removeLivePrefix(textarea)
-  }
+  const action = resolveLivePrefixAction({
+    value: textarea.value,
+    pendingInsertion,
+    requireContent,
+    context,
+    settings: getSettings(),
+  })
 
-  if (
-    hasTimePrefix(textarea.value) ||
-    (requireContent && !textarea.value.trim()) ||
-    (!requireContent && textarea.value.trim().length > 0)
-  ) {
-    return false
-  }
-
-  // A raw Markdown heading must remain at the start until Logseq parses its
-  // heading level. The committed-block fallback prefixes it later when it is
-  // not part of an excluded section.
-  if (/^#{1,6}(?:\s|$)/u.test(textarea.value.trimStart())) return false
+  if (action === 'refresh') commandedEditors.add(textarea)
+  if (action === 'refresh' || action === 'strip') return removeLivePrefix(textarea)
+  if (action === 'none') return false
 
   // Runs during capture, before Logseq handles the same editing event. Updating
   // the live textarea here lets Logseq persist one coherent value and avoids
@@ -437,7 +405,32 @@ function prefixLiveEditor(
       valueLength: textarea.value.length,
     })
   }
+
+  // This prefix was decided from the exclusion answer resolved before the slash
+  // command ran, and a command can turn the block into an excluded shape — `/TODO`
+  // makes it a task node tagged `Task`. Confirm it against the block Logseq has
+  // now, once the command's own transaction has landed.
+  if (commandedEditors.delete(textarea)) void revalidateAfterCommand(textarea)
   return true
+}
+
+async function revalidateAfterCommand(
+  textarea: HTMLTextAreaElement,
+): Promise<void> {
+  const context = journalEditors.get(textarea)
+  if (!context) return
+
+  const block = await logseq.Editor.getBlock(context.blockUuid)
+  if (!block || journalEditors.get(textarea) !== context) return
+
+  const refreshed = await createEditorContext(block)
+  if (journalEditors.get(textarea) !== context || !textarea.isConnected) return
+  journalEditors.set(textarea, refreshed)
+
+  if (!titleIsExcluded(textarea.value, refreshed, getSettings())) return
+  // The original input event has already reached Logseq, so the removal needs
+  // its own event to be persisted.
+  if (removeLivePrefix(textarea)) dispatchSyntheticEditorInput(textarea)
 }
 
 function repairPrefixCaret(textarea: HTMLTextAreaElement): void {

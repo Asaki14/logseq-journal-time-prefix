@@ -260,6 +260,81 @@ export function titleHasExcludedTag(
   })
 }
 
+export interface EditorExclusionContext {
+  headingLevel: number | null
+  excludedBySection: boolean
+  excludedByTag: boolean
+}
+
+export interface ExclusionSettings {
+  excludedHeadingTitles: string[]
+  excludedTags: string[]
+}
+
+export function titleIsExcluded(
+  title: string,
+  context: EditorExclusionContext,
+  settings: ExclusionSettings,
+): boolean {
+  if (context.excludedBySection || context.excludedByTag) return true
+  if (titleIsSlashCommand(title)) return true
+  if (titleHasExcludedTag(title, settings.excludedTags)) return true
+
+  const heading = markdownHeading(title)
+  const isHeading = context.headingLevel !== null || heading !== null
+  return Boolean(
+    isHeading &&
+      headingTitleIsExcluded(
+        heading?.title ?? stripTimePrefix(title).trim(),
+        settings.excludedHeadingTitles,
+      ),
+  )
+}
+
+// `refresh` strips any prefix like `strip` does, and additionally asks the caller
+// to re-resolve exclusion once Logseq has applied the command: the answer it
+// holds describes the block from before the command.
+export type LivePrefixAction = 'insert' | 'strip' | 'none' | 'refresh'
+
+// Decides what the live editor path does before Logseq handles the editing
+// event. `context` carries the exclusion answer resolved when editing started;
+// `pendingInsertion` is the `beforeinput` data, which is not in `value` yet.
+export function resolveLivePrefixAction(input: {
+  value: string
+  pendingInsertion: string
+  requireContent: boolean
+  context: EditorExclusionContext
+  settings: ExclusionSettings
+}): LivePrefixAction {
+  const { value, requireContent, context, settings } = input
+  // On `beforeinput` the character has not been inserted yet, so exclusion has
+  // to judge the value the block is about to have. That path only runs on an
+  // otherwise blank block, so prepending the insertion is enough to decide it.
+  const title = input.pendingInsertion + value
+
+  // A slash command lets Logseq rewrite the block itself — `/TODO` turns it into
+  // a task node tagged `Task` — so an exclusion answer resolved before the
+  // command ran no longer describes the block and has to be re-resolved.
+  if (titleIsSlashCommand(title)) return 'refresh'
+
+  if (titleIsExcluded(title, context, settings)) return 'strip'
+
+  if (
+    hasTimePrefix(value) ||
+    (requireContent && !value.trim()) ||
+    (!requireContent && value.trim().length > 0)
+  ) {
+    return 'none'
+  }
+
+  // A raw Markdown heading must remain at the start until Logseq parses its
+  // heading level. The committed-block fallback prefixes it later when it is
+  // not part of an excluded section.
+  if (/^#{1,6}(?:\s|$)/u.test(value.trimStart())) return 'none'
+
+  return 'insert'
+}
+
 export function compareBlockOrder(
   left: Pick<BlockEntity, 'order'>,
   right: Pick<BlockEntity, 'order'>,
