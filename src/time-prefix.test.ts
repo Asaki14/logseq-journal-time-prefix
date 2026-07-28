@@ -18,6 +18,7 @@ import {
   matchTimePrefix,
   parseListSetting,
   parseTimePrefixFormat,
+  resolveLivePrefixAction,
   setTimePrefixFormat,
   stripTimePrefix,
   titleHasExcludedTag,
@@ -303,5 +304,120 @@ describe('slash command exclusion', () => {
     expect(titleIsSlashCommand('[09:07] /todo')).toBe(true)
     setTimePrefixFormat('【{time}】')
     expect(titleIsSlashCommand('【09:07】/todo')).toBe(true)
+  })
+})
+
+describe('live prefix action', () => {
+  const noExclusions = { excludedHeadingTitles: [], excludedTags: [] }
+  const cleanContext = {
+    headingLevel: null,
+    excludedBySection: false,
+    excludedByTag: false,
+  }
+
+  it('prefixes the first character of an ordinary block', () => {
+    expect(
+      resolveLivePrefixAction({
+        value: '',
+        pendingInsertion: 'a',
+        requireContent: false,
+        context: cleanContext,
+        settings: noExclusions,
+      }),
+    ).toBe('insert')
+  })
+
+  // Reproduces the reported bug: the exclusion answer is resolved when editing
+  // starts, before `/TODO` tags the block, so it must not survive the command.
+  it('asks for a fresh context while a slash command is in flight', () => {
+    expect(
+      resolveLivePrefixAction({
+        value: '',
+        pendingInsertion: '/',
+        requireContent: false,
+        context: cleanContext,
+        settings: { excludedHeadingTitles: [], excludedTags: ['task'] },
+      }),
+    ).toBe('refresh')
+    expect(
+      resolveLivePrefixAction({
+        value: '/todo',
+        pendingInsertion: '',
+        requireContent: true,
+        context: cleanContext,
+        settings: noExclusions,
+      }),
+    ).toBe('refresh')
+    expect(
+      resolveLivePrefixAction({
+        value: '[09:07] /todo',
+        pendingInsertion: '',
+        requireContent: true,
+        context: cleanContext,
+        settings: noExclusions,
+      }),
+    ).toBe('refresh')
+  })
+
+  it('never prefixes a block the refreshed context reports as excluded', () => {
+    const excludedByTag = { ...cleanContext, excludedByTag: true }
+    expect(
+      resolveLivePrefixAction({
+        value: '',
+        pendingInsertion: 'a',
+        requireContent: false,
+        context: excludedByTag,
+        settings: { excludedHeadingTitles: [], excludedTags: ['task'] },
+      }),
+    ).toBe('strip')
+    // The user removed the prefix by hand and keeps typing: it stays removed.
+    expect(
+      resolveLivePrefixAction({
+        value: 'buy milk',
+        pendingInsertion: '',
+        requireContent: true,
+        context: excludedByTag,
+        settings: { excludedHeadingTitles: [], excludedTags: ['task'] },
+      }),
+    ).toBe('strip')
+    expect(
+      resolveLivePrefixAction({
+        value: '[09:07] buy milk',
+        pendingInsertion: '',
+        requireContent: true,
+        context: excludedByTag,
+        settings: { excludedHeadingTitles: [], excludedTags: ['task'] },
+      }),
+    ).toBe('strip')
+  })
+
+  it('leaves an existing prefix and a blank block alone', () => {
+    expect(
+      resolveLivePrefixAction({
+        value: '[09:07] done',
+        pendingInsertion: '',
+        requireContent: true,
+        context: cleanContext,
+        settings: noExclusions,
+      }),
+    ).toBe('none')
+    expect(
+      resolveLivePrefixAction({
+        value: '   ',
+        pendingInsertion: '',
+        requireContent: true,
+        context: cleanContext,
+        settings: noExclusions,
+      }),
+    ).toBe('none')
+    expect(
+      resolveLivePrefixAction({
+        value: '## Notes',
+        pendingInsertion: '',
+        requireContent: true,
+        context: cleanContext,
+        settings: noExclusions,
+      }),
+    ).toBe('none')
   })
 })

@@ -12,6 +12,10 @@ All notable changes to this project are documented here.
 
 - Move `@logseq/libs` to `0.3.4`, the SDK version that exposes the sidebar renderer API used by Logseq DB hosts.
 
+### Fixed
+
+- Honor the exclusion lists for a block shape a slash command creates. Inserting a task marker with `/TODO` (`/待办`) tags the block `Task` in a DB graph, but the live editor still held the exclusion answer resolved before the command ran, so a block excluded through `task` was prefixed anyway — intermittently, depending on whether that answer had been resolved yet. The answer is now re-resolved after the command, and a prefix that turns out to belong to an excluded block is removed again, so a prefix deleted by hand no longer returns when the block is edited.
+
 ## [0.3.2] - 2026-07-26
 
 ### Fixed
