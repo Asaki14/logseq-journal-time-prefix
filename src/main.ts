@@ -9,6 +9,15 @@ import type {
   ExclusionSettings,
   GraphSupport,
 } from './time-prefix'
+import type { PanelFieldKey, SettingsPanel } from './settings-panel'
+import {
+  PANEL_OPEN_CLASS,
+  PANEL_ROOT_ID,
+  PANEL_STYLE,
+  panelPlacement,
+  panelValuesFromSettings,
+  renderSettingsPanel,
+} from './settings-panel'
 import {
   caretAfterPrefixInsertion,
   changedFromEmpty,
@@ -556,6 +565,8 @@ async function start(): Promise<void> {
     return
   }
 
+  provideSettingsPanelUI()
+
   hostDocument.addEventListener('focusin', onEditorFocus, true)
   hostDocument.addEventListener('keydown', onEditorStructureKeydown, true)
   hostDocument.addEventListener('beforeinput', onBeforeEditorInput, true)
@@ -565,10 +576,12 @@ async function start(): Promise<void> {
 
   const removeSettingsListener = logseq.onSettingsChanged(() => {
     applyTimePrefixFormat()
+    settingsPanel?.sync(panelValuesFromSettings(logseq.settings))
     void rememberJournalEditor(hostDocument.activeElement)
   })
 
   logseq.beforeunload(async () => {
+    closeSettingsPanel()
     hostDocument.removeEventListener('focusin', onEditorFocus, true)
     hostDocument.removeEventListener('keydown', onEditorStructureKeydown, true)
     hostDocument.removeEventListener('beforeinput', onBeforeEditorInput, true)
@@ -580,13 +593,175 @@ async function start(): Promise<void> {
   console.info('[journal-time-prefix] Ready')
 }
 
+const SETTINGS_WRITE_DELAY_MS = 300
+const TOOLBAR_ANCHOR_SELECTOR = '[data-on-click="openTimePrefixSettings"]'
+const PANEL_MOUNT_ATTEMPTS = 20
+const PANEL_MOUNT_INTERVAL_MS = 50
+
+let settingsPanel: SettingsPanel | null = null
+let settingsPanelIsOpen = false
+const pendingSettingWrites = new Map<PanelFieldKey, string>()
+let settingWriteTimer = 0
+
+function flushSettingWrites(): void {
+  window.clearTimeout(settingWriteTimer)
+  if (pendingSettingWrites.size === 0) return
+  const patch = Object.fromEntries(pendingSettingWrites)
+  pendingSettingWrites.clear()
+  logseq.updateSettings(patch)
+}
+
+// Typing in the panel writes through to the same settings the schema declares,
+// so the edit takes effect live. Debounced to keep one keystroke from becoming
+// one settings write.
+function queueSettingWrite(key: PanelFieldKey, value: string): void {
+  pendingSettingWrites.set(key, value)
+  window.clearTimeout(settingWriteTimer)
+  settingWriteTimer = window.setTimeout(
+    flushSettingWrites,
+    SETTINGS_WRITE_DELAY_MS,
+  )
+}
+
+// Host-document nodes come from the parent realm, where `instanceof Node` is
+// false, so membership is checked structurally.
+function eventElement(target: EventTarget | null): Element | null {
+  if (!target || !('nodeType' in target)) return null
+  const node = target as Node
+  return node.nodeType === 1 ? (node as Element) : node.parentElement
+}
+
+function onPanelOutsidePointerDown(event: Event): void {
+  const root = settingsPanel?.root
+  const element = eventElement(event.target)
+  if (!root || !element || root.contains(element)) return
+  // The toolbar button toggles the panel itself. Closing on its pointerdown
+  // would let the following click reopen it and look like nothing happened.
+  if (element.closest(TOOLBAR_ANCHOR_SELECTOR)) return
+  closeSettingsPanel()
+}
+
+function onPanelKeydown(event: Event): void {
+  if ((event as KeyboardEvent).key !== 'Escape') return
+  event.stopPropagation()
+  closeSettingsPanel()
+}
+
+function closeSettingsPanel(): void {
+  const root = settingsPanel?.root
+  if (!settingsPanelIsOpen || !root) return
+  settingsPanelIsOpen = false
+  root.classList.remove(PANEL_OPEN_CLASS)
+  root.ownerDocument.removeEventListener(
+    'pointerdown',
+    onPanelOutsidePointerDown,
+    true,
+  )
+  root.ownerDocument.removeEventListener('keydown', onPanelKeydown, true)
+  flushSettingWrites()
+}
+
+// The host mounts injected UI asynchronously over the plugin bridge, so the
+// container is looked up rather than assumed present.
+async function resolvePanelRoot(
+  hostDocument: Document,
+): Promise<HTMLElement | null> {
+  for (let attempt = 0; attempt < PANEL_MOUNT_ATTEMPTS; attempt += 1) {
+    const root = hostDocument.getElementById(PANEL_ROOT_ID)
+    if (root) return root
+    await new Promise((resolve) =>
+      window.setTimeout(resolve, PANEL_MOUNT_INTERVAL_MS),
+    )
+  }
+  return null
+}
+
+function provideSettingsPanelUI(): void {
+  logseq.provideStyle({ key: 'journal-time-prefix-panel', style: PANEL_STYLE })
+  // Only the empty container is host-rendered markup; the controls are built and
+  // wired from here, which the same-origin host document already allows.
+  logseq.provideUI({
+    key: 'journal-time-prefix-panel',
+    path: 'body',
+    template: `<div id="${PANEL_ROOT_ID}"></div>`,
+  })
+}
+
+async function ensureSettingsPanel(): Promise<SettingsPanel | null> {
+  if (settingsPanel) return settingsPanel
+
+  const hostDocument = getHostDocument()
+  if (!hostDocument) return null
+
+  const root = await resolvePanelRoot(hostDocument)
+  if (!root) return null
+
+  settingsPanel = renderSettingsPanel(root, {
+    onChange: queueSettingWrite,
+    onClose: closeSettingsPanel,
+    onOpenFullSettings() {
+      closeSettingsPanel()
+      logseq.showSettingsUI()
+    },
+  })
+  return settingsPanel
+}
+
+function placeSettingsPanel(root: HTMLElement): void {
+  const hostDocument = root.ownerDocument
+  const view = hostDocument.defaultView
+  const anchor = hostDocument
+    .querySelector(TOOLBAR_ANCHOR_SELECTOR)
+    ?.getBoundingClientRect()
+  const placement = panelPlacement(
+    anchor ?? null,
+    {
+      width: view?.innerWidth ?? root.offsetWidth,
+      height: view?.innerHeight ?? root.offsetHeight,
+    },
+    { width: root.offsetWidth, height: root.offsetHeight },
+  )
+  root.style.left = `${placement.left}px`
+  root.style.top = `${placement.top}px`
+}
+
+async function toggleSettingsPanel(): Promise<void> {
+  if (settingsPanelIsOpen) {
+    closeSettingsPanel()
+    return
+  }
+
+  const panel = await ensureSettingsPanel()
+  if (!panel) {
+    // Nothing to mount the panel on, so the schema-driven settings modal — still
+    // registered — carries the same options.
+    logseq.showSettingsUI()
+    return
+  }
+
+  panel.sync(panelValuesFromSettings(logseq.settings))
+  // Measuring needs the panel displayed, and placing it needs the measurement.
+  panel.root.style.visibility = 'hidden'
+  panel.root.classList.add(PANEL_OPEN_CLASS)
+  placeSettingsPanel(panel.root)
+  panel.root.style.visibility = ''
+  settingsPanelIsOpen = true
+
+  panel.root.ownerDocument.addEventListener(
+    'pointerdown',
+    onPanelOutsidePointerDown,
+    true,
+  )
+  panel.root.ownerDocument.addEventListener('keydown', onPanelKeydown, true)
+}
+
 // The toolbar item is markup rendered by the host, so its click handler cannot
 // be a closure: `data-on-click` names a method the host looks up in the model
 // registered here.
 function registerToolbarItem(): void {
   logseq.provideModel({
     openTimePrefixSettings() {
-      logseq.showSettingsUI()
+      void toggleSettingsPanel()
     },
   })
 

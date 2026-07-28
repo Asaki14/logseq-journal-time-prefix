@@ -43,10 +43,17 @@ export function setTimePrefixFormat(value: unknown): string {
   return timePrefixFormat
 }
 
-export function formatTimePrefix(date: Date): string {
+export function renderTimePrefix(format: unknown, date: Date): string {
   const hours = String(date.getHours()).padStart(2, '0')
   const minutes = String(date.getMinutes()).padStart(2, '0')
-  return timePrefixFormat.replace(TIME_PLACEHOLDER, `${hours}:${minutes}`)
+  return parseTimePrefixFormat(format).replace(
+    TIME_PLACEHOLDER,
+    `${hours}:${minutes}`,
+  )
+}
+
+export function formatTimePrefix(date: Date): string {
+  return renderTimePrefix(timePrefixFormat, date)
 }
 
 // Detection has to cover the configured format and the built-in one, otherwise
