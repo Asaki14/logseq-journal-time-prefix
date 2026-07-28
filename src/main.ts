@@ -771,7 +771,7 @@ function registerToolbarItem(): void {
       <a data-on-click="openTimePrefixSettings"
          class="button"
          title="Journal Time Prefix settings">
-        <i class="ti ti-clock-hour-4"></i>
+        <i class="ti ti-clock-hour-4" style="font-size: 20px"></i>
       </a>
     `,
   })
