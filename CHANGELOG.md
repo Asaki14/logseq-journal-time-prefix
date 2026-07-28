@@ -6,11 +6,11 @@ All notable changes to this project are documented here.
 
 ### Added
 
-- Register a right-sidebar panel through `logseq.Experiments.registerSidebarRenderer`. Open it from the puzzle button in the right sidebar's top bar; it reports whether the plugin is active, the configured prefix format and the prefix the next block would receive, and opens the plugin settings. Logseq 2.0.1 labels the sidebar item with the raw renderer key instead of the registered title; the menu entry and the panel itself show the title.
+- Add a toolbar button through `logseq.App.registerUIItem('toolbar', …)`. It shows up in the toolbar's plugin area — pinnable from the toolbar plugins popover — and opens the plugin settings when clicked.
 
 ### Changed
 
-- Move `@logseq/libs` to `0.3.4`, the SDK version that exposes the sidebar renderer API used by Logseq DB hosts.
+- Move `@logseq/libs` to `0.3.4`, the SDK version tracking Logseq's DB-era plugin host.
 
 ### Fixed
 
