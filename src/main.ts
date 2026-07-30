@@ -31,6 +31,7 @@ import {
   isContentInsertion,
   isInExcludedHeadingSection,
   isJournalPage,
+  isTaskCycleShortcut,
   isTopLevelBlock,
   matchTimePrefix,
   normalizeTag,
@@ -412,10 +413,10 @@ function prefixLiveEditor(
     })
   }
 
-  // This prefix was decided from the exclusion answer resolved before the slash
-  // command ran, and a command can turn the block into an excluded shape — `/TODO`
-  // makes it a task node tagged `Task`. Confirm it against the block Logseq has
-  // now, once the command's own transaction has landed.
+  // This prefix was decided from an exclusion answer resolved before Logseq
+  // reshaped the block, and both `/TODO` and the cycle-todo shortcut turn it into
+  // a task node tagged `Task`. Confirm it against the block Logseq has now, once
+  // that transaction has landed.
   if (commandedEditors.delete(textarea)) void revalidateAfterCommand(textarea)
   return true
 }
@@ -495,6 +496,12 @@ function onEditorStructureKeydown(event: KeyboardEvent): void {
   if (!['Enter', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
   const textarea = getTextarea(event.target)
   if (!textarea) return
+
+  // The cycle-todo shortcut reshapes this block into a task node after the
+  // refresh below has already read it, so the refreshed answer is stale too.
+  // Re-check it once a prefix is actually about to be inserted, the same way a
+  // slash command is handled.
+  if (isTaskCycleShortcut(event)) commandedEditors.add(textarea)
 
   // Logseq reuses one textarea when Enter creates the next block. focusin does
   // not fire, so retaining the old block's section classification causes the

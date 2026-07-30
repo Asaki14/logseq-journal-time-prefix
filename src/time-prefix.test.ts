@@ -13,6 +13,7 @@ import {
   isContentInsertion,
   isInExcludedHeadingSection,
   isJournalPage,
+  isTaskCycleShortcut,
   isTopLevelBlock,
   markdownHeading,
   matchTimePrefix,
@@ -304,6 +305,21 @@ describe('slash command exclusion', () => {
     expect(titleIsSlashCommand('[09:07] /todo')).toBe(true)
     setTimePrefixFormat('【{time}】')
     expect(titleIsSlashCommand('【09:07】/todo')).toBe(true)
+  })
+})
+
+// Reproduces the reported bug: cmd+Enter makes the edited block a task node
+// without touching its text, so the only signal available is the keydown itself.
+describe('isTaskCycleShortcut', () => {
+  it('recognizes the cycle-todo shortcut on either platform', () => {
+    expect(isTaskCycleShortcut({ key: 'Enter', metaKey: true })).toBe(true)
+    expect(isTaskCycleShortcut({ key: 'Enter', ctrlKey: true })).toBe(true)
+  })
+
+  it('leaves ordinary block editing keys alone', () => {
+    expect(isTaskCycleShortcut({ key: 'Enter' })).toBe(false)
+    expect(isTaskCycleShortcut({ key: 'ArrowDown', metaKey: true })).toBe(false)
+    expect(isTaskCycleShortcut({ key: 'a', metaKey: true })).toBe(false)
   })
 })
 
