@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## [Unreleased]
+
+### Fixed
+
+- Honor the exclusion lists for a task block created with the cycle-todo shortcut (`cmd`/`ctrl` + `Enter`). Unlike `/TODO`, that shortcut leaves the block text untouched and tags the block `Task` only tens of milliseconds after the keydown — later than the exclusion refresh the keydown already scheduled — so a block excluded through `task` was still prefixed on the first character typed into it. The shortcut now marks the editor for the same post-command re-resolution a slash command gets.
+
 ## [0.4.0] - 2026-07-29
 
 ### Added
