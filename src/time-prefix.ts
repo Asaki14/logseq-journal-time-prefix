@@ -230,6 +230,19 @@ export function titleIsSlashCommand(title: string): boolean {
   return stripTimePrefix(title).trimStart().startsWith('/')
 }
 
+// Logseq's cycle-todo shortcut (cmd+Enter on macOS, ctrl+Enter elsewhere) turns
+// the edited block into a task node tagged `Task` in place, leaving its text
+// untouched — so unlike a slash command it gives the editor path no in-band
+// signal. Its transaction also lands tens of milliseconds after the keydown,
+// later than any exclusion refresh scheduled from that keydown, which is why the
+// answer has to be re-checked once a prefix is about to be inserted.
+export function isTaskCycleShortcut(
+  event: Pick<KeyboardEvent, 'key'> &
+    Partial<Pick<KeyboardEvent, 'metaKey' | 'ctrlKey'>>,
+): boolean {
+  return event.key === 'Enter' && (event.metaKey === true || event.ctrlKey === true)
+}
+
 export function normalizeTag(tag: string): string {
   return tag
     .trim()
