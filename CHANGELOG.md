@@ -6,6 +6,7 @@ All notable changes to this project are documented here.
 
 ### Fixed
 
+- Never prefix a block whose content is a Markdown fenced code block. A block kept as fenced text (` ```d2 … ``` `, for a diagram a renderer plugin picks up) starts with its opening fence, so the prefix broke the fence and the block stopped rendering. Both paths that could add it — the live editor and the committed-block fallback — now skip a title that opens with three or more backticks or tildes, and editing such a block removes a prefix an earlier version left behind. This is a hard exclusion, not a setting.
 - Honor the exclusion lists for a task block created with the cycle-todo shortcut (`cmd`/`ctrl` + `Enter`). Unlike `/TODO`, that shortcut leaves the block text untouched and tags the block `Task` only tens of milliseconds after the keydown — later than the exclusion refresh the keydown already scheduled — so a block excluded through `task` was still prefixed on the first character typed into it. The shortcut now marks the editor for the same post-command re-resolution a slash command gets.
 
 ## [0.4.0] - 2026-07-29
