@@ -23,6 +23,8 @@ import {
   setTimePrefixFormat,
   stripTimePrefix,
   titleHasExcludedTag,
+  titleIsExcluded,
+  titleIsFencedCode,
   titleIsSlashCommand,
 } from './time-prefix'
 
@@ -305,6 +307,68 @@ describe('slash command exclusion', () => {
     expect(titleIsSlashCommand('[09:07] /todo')).toBe(true)
     setTimePrefixFormat('【{time}】')
     expect(titleIsSlashCommand('【09:07】/todo')).toBe(true)
+  })
+})
+
+// Reproduces the reported bug: a prefix in front of a Markdown fence breaks the
+// fence, so the block stops being a code block and its renderer stops firing.
+describe('fenced code exclusion', () => {
+  const fenced = '```d2\nA -> B\n```'
+  const noExclusions = { excludedHeadingTitles: [], excludedTags: [] }
+  const cleanContext = {
+    headingLevel: null,
+    excludedBySection: false,
+    excludedByTag: false,
+  }
+
+  it('excludes a block that opens with a fence', () => {
+    expect(titleIsFencedCode(fenced)).toBe(true)
+    expect(titleIsFencedCode('~~~d2\nA -> B\n~~~')).toBe(true)
+    expect(titleIsFencedCode('````\nnested ``` fence\n````')).toBe(true)
+    expect(titleIsFencedCode('  ```')).toBe(true)
+  })
+
+  it('keeps blocks that are not fenced code', () => {
+    expect(titleIsFencedCode('')).toBe(false)
+    expect(titleIsFencedCode('`inline` code')).toBe(false)
+    expect(titleIsFencedCode('``double`` backticks')).toBe(false)
+    expect(titleIsFencedCode('~strike~ through')).toBe(false)
+    expect(titleIsFencedCode('see the ```d2 block below')).toBe(false)
+  })
+
+  it('sees through a prefix that was already inserted', () => {
+    expect(titleIsFencedCode(`[09:07] ${fenced}`)).toBe(true)
+    setTimePrefixFormat('【{time}】')
+    expect(titleIsFencedCode(`【09:07】${fenced}`)).toBe(true)
+  })
+
+  it('reports a fenced block as excluded', () => {
+    expect(titleIsExcluded(fenced, cleanContext, noExclusions)).toBe(true)
+    expect(
+      titleIsExcluded(`[09:07] ${fenced}`, cleanContext, noExclusions),
+    ).toBe(true)
+  })
+
+  // Editing an already-corrupted block repairs it instead of leaving the prefix.
+  it('strips the prefix an earlier version added to a fenced block', () => {
+    expect(
+      resolveLivePrefixAction({
+        value: `[09:07] ${fenced}`,
+        pendingInsertion: '',
+        requireContent: true,
+        context: cleanContext,
+        settings: noExclusions,
+      }),
+    ).toBe('strip')
+    expect(
+      resolveLivePrefixAction({
+        value: fenced,
+        pendingInsertion: '',
+        requireContent: true,
+        context: cleanContext,
+        settings: noExclusions,
+      }),
+    ).toBe('strip')
   })
 })
 

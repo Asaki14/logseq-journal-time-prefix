@@ -4,6 +4,7 @@ import type { BlockEntity, IDatom, PageEntity } from '@logseq/libs/dist/LSPlugin
 // so it stays part of prefix detection whatever the current format is.
 const LEGACY_TIME_PREFIX_PATTERN = /^\[\d{2}:\d{2}\]\s/
 const MARKDOWN_HEADING_PATTERN = /^(#{1,6})(?:\s+(.*)|\s*)$/
+const FENCED_CODE_PATTERN = /^(?:`{3,}|~{3,})/
 const TAG_BOUNDARY_PATTERN = /[\s,.;:!?，。；：！？、()[\]{}]/u
 
 const TIME_PLACEHOLDER = '{time}'
@@ -230,6 +231,14 @@ export function titleIsSlashCommand(title: string): boolean {
   return stripTimePrefix(title).trimStart().startsWith('/')
 }
 
+// A block kept as Markdown-fenced text (not a DB code node) starts with its
+// opening fence, so a prefix in front of it breaks the fence and the block stops
+// being a code block. Markdown accepts backticks and tildes, three or more of
+// either, and allows indentation before them.
+export function titleIsFencedCode(title: string): boolean {
+  return FENCED_CODE_PATTERN.test(stripTimePrefix(title).trimStart())
+}
+
 // Logseq's cycle-todo shortcut (cmd+Enter on macOS, ctrl+Enter elsewhere) turns
 // the edited block into a task node tagged `Task` in place, leaving its text
 // untouched — so unlike a slash command it gives the editor path no in-band
@@ -298,6 +307,7 @@ export function titleIsExcluded(
 ): boolean {
   if (context.excludedBySection || context.excludedByTag) return true
   if (titleIsSlashCommand(title)) return true
+  if (titleIsFencedCode(title)) return true
   if (titleHasExcludedTag(title, settings.excludedTags)) return true
 
   const heading = markdownHeading(title)

@@ -40,6 +40,7 @@ import {
   setTimePrefixFormat,
   titleHasExcludedTag,
   titleIsExcluded,
+  titleIsFencedCode,
   titleIsSlashCommand,
 } from './time-prefix'
 
@@ -262,6 +263,7 @@ async function blockIsExcluded(
   settings = getSettings(),
 ): Promise<boolean> {
   if (titleIsSlashCommand(block.title)) return true
+  if (titleIsFencedCode(block.title)) return true
 
   const excludedByTag = await blockHasExcludedTag(
     block,
