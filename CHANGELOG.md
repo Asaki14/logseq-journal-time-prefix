@@ -4,6 +4,11 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+
+### Documentation
+
+- Refresh the English and Chinese READMEs, add `llms.txt`, and rename the Chinese README to `README_CN.md`.
+
 ### Fixed
 
 - Never prefix a block whose content is a Markdown fenced code block. A block kept as fenced text (` ```d2 … ``` `, for a diagram a renderer plugin picks up) starts with its opening fence, so the prefix broke the fence and the block stopped rendering. Both paths that could add it — the live editor and the committed-block fallback — now skip a title that opens with three or more backticks or tildes, and editing such a block removes a prefix an earlier version left behind. This is a hard exclusion, not a setting.

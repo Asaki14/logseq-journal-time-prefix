@@ -1,99 +1,65 @@
-# Journal Time Prefix
+<div align="center">
+  <img src="https://raw.githubusercontent.com/Asaki14/logseq-journal-time-prefix/main/icon.svg" width="120" />
+  <h1>Journal Time Prefix</h1>
+  <p><b>Add your local time as you start a journal block.</b></p>
+  <p>English · <a href="README_CN.md">中文</a></p>
+  <a href="https://github.com/Asaki14/logseq-journal-time-prefix/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Asaki14/logseq-journal-time-prefix/ci.yml?branch=main&style=flat-square&label=tests" alt="Tests"></a>
+  <a href="https://github.com/Asaki14/logseq-journal-time-prefix/stargazers"><img src="https://img.shields.io/github/stars/Asaki14/logseq-journal-time-prefix?style=flat-square" alt="Stars"></a>
+  <a href="https://github.com/Asaki14/logseq-journal-time-prefix/tags"><img src="https://img.shields.io/github/v/tag/Asaki14/logseq-journal-time-prefix?label=version&style=flat-square" alt="Version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License"></a>
+</div>
 
-[中文](README.zh-CN.md)
+<br/>
 
-A lightweight plugin for **Logseq DB graphs**. When you first enter content in a top-level block directly under a journal page, the plugin adds the current local time:
+<div align="center">
+  <img src="https://raw.githubusercontent.com/Asaki14/logseq-journal-time-prefix/main/docs/demo.gif" alt="Typing in a journal block adds a time prefix" />
+</div>
 
-```text
-[14:32] Finished today’s task…
-```
+## Features
 
-![Typing in a journal page adds the time prefix; the last block uses the custom format `({time}) `](https://raw.githubusercontent.com/Asaki14/logseq-journal-time-prefix/main/docs/demo.gif)
+| Feature | When | What it does |
+|:--- |:--- |:--- |
+| Live timestamp | You start a journal block | Adds the current local time to the first top-level block input, including paste and Chinese IME input. |
+| Prefix format | You want another style | Uses `[{time}] ` by default; change or remove the brackets in settings. |
+| Exclusions | A section or block should stay untouched | Skip an exact heading section, a tagged block and its subtree, slash commands, and fenced code blocks. |
 
-## Behavior
+## Install
 
-- Supports DB graphs only. Logseq still lets you enable it on a file graph, where the plugin warns once and stays inactive.
-- Only prefixes top-level blocks directly under journal pages.
-- Nested blocks at level 2 or deeper are ignored.
-- Adds a prefix only when an empty block receives its first content.
-- Supports regular keyboard input, paste, and Chinese IME composition.
-- Never duplicates an existing prefix.
-- Uses the operating system’s local time zone.
-- The brackets around the time are configurable and can be removed entirely.
-- Can exclude a section by its exact heading title, through the next heading of the same or higher level.
-- Can exclude a tagged block and its subtree.
+In Logseq, open `Plugins` → `Marketplace`, search for `Journal Time Prefix`, and install it. Versions through 0.3.1 added the prefix only after a block was committed; update to 0.3.2 or later for live typing.
 
-## Prefix format
+To install a release manually:
 
-Configure `Time prefix format / 时间前缀格式` in the plugin settings:
+1. Download `logseq-journal-time-prefix-v*.zip` from the [latest release](https://github.com/Asaki14/logseq-journal-time-prefix/releases/latest). Do not use GitHub's automatically generated `Source code` archives.
+2. Extract the ZIP and enable Developer Mode in Logseq.
+3. Open `Plugins` → `Load unpacked plugin` and select the extracted `logseq-journal-time-prefix` folder.
 
-- `{time}` stands for the 24-hour `HH:mm` time; the time format itself is fixed.
-- The default is `[{time}] `, which produces `[14:32] `.
-- Other examples: `({time}) ` → `(14:32) `; `【{time}】` → `【14:32】`; `{time} ` → `14:32 ` (no brackets).
-- A value without `{time}` is ignored and the default format is used.
+To update a manual install, replace the old folder with the latest release folder and reload the plugin.
 
-Detection follows the configured format and always also recognizes the built-in `[HH:mm] ` prefix, so changing the format never adds a second prefix to existing blocks. The reverse is not true: blocks written with a custom format are only recognized while that format is configured, so pick one format and keep it.
+## Usage and settings
 
-Without brackets the plugin cannot tell its own `14:32 ` apart from a hand-written `09:00 standup`. Such blocks count as already prefixed and are skipped, so no duplicate time is added.
+Open a journal page and type in a top-level block directly under the page. The prefix appears with your first input, and the caret stays after it. Nested blocks and regular pages are not changed. This plugin supports DB graphs only. Logseq may still enable it on a file graph; it warns once and remains inactive.
 
-## Exclusion rules
+Configure these settings in the clock-button popover or under `Plugins` → `Journal Time Prefix` → `Settings`:
 
-Configure these fields in the plugin settings:
+- `Time prefix format / 时间前缀格式` (`timePrefixFormat`, default `[{time}] `): `{time}` is fixed to 24-hour `HH:mm`. For example, `({time}) ` gives `(14:32) `, `【{time}】` gives `【14:32】`, and `{time} ` gives `14:32 ` without brackets. A value without `{time}` is ignored and the default is used.
+- `Excluded heading titles / 排除的标题` (`excludedHeadingTitles`, default empty): one exact title per line, without `#`; matching is case-insensitive. The heading and its section are excluded through the next heading of the same or higher level.
+- `Excluded block tags / 排除的 block 标签` (`excludedTags`, default empty): one tag per line, with or without `#`; supports `#tag` and `#[[tag name]]`. The tagged block and its subtree are excluded.
 
-- `Excluded heading titles / 排除的标题`: one exact title per line, without `#`. Matching is case-insensitive.
-- `Excluded block tags / 排除的 block 标签`: one tag per line, with or without `#`; both `#tag` and `#[[tag name]]` are supported.
+The plugin always recognizes the built-in `[HH:mm] ` prefix as well as the configured format, so changing formats will not duplicate that built-in form. Custom-format prefixes are recognized only while that format is configured, so keep one format selected. Without brackets, a hand-written value such as `09:00 standup` is treated as an existing prefix and skipped.
 
-Leave both fields empty to preserve the original behavior. The plugin still only processes journal pages, not regular pages.
+A block whose content starts with `/` never gets a prefix. The plugin does not add one after the command runs, so type a character before opening the slash-command menu if that block needs a timestamp. A block starting with a Markdown fence of three or more backticks or tildes is also excluded.
 
-One exclusion needs no configuration: a block whose content starts with `/` never gets a prefix, so Logseq's slash-command menu keeps working. The prefix is not added back after the command runs — type a character before opening the menu if that block should carry a timestamp.
+The clock button opens a compact popover with a preview of the next prefix and edits that apply as you type. Use the toolbar plugins popover to pin the button. `Full settings / 完整设置` opens Logseq's built-in settings for the same options. The plugin has no commands or keybindings.
 
-## Toolbar button
+## Why
 
-The plugin contributes a clock button to the toolbar's plugin area, next to Logseq's own settings button. Clicking it opens a compact settings popover under the button, styled with Logseq's own theme variables, where the format and both exclusion lists are edited. It shows the prefix the next block would receive, edits take effect as you type, and the popover closes on `Esc`, on a click outside it, or through its close button. `Full settings / 完整设置` opens Logseq's built-in settings panel, which edits exactly the same options.
+Logseq journal entries are easier to scan when each top-level block shows when it was written. Adding the time by hand interrupts writing and makes timestamps inconsistent.
 
-Logseq collects plugin buttons in the toolbar plugins popover, so open that popover and pin `Journal Time Prefix` to keep the button on the toolbar itself.
+Journal Time Prefix adds the time at the first input, without changing nested blocks or regular pages. The time format stays fixed at local 24-hour `HH:mm`; brackets and exclusions are configurable.
 
-## Installation
+## Contributing
 
-### From the Logseq marketplace
-
-Open `Plugins` → `Marketplace`, search for `Journal Time Prefix` and install it. Versions up to 0.3.1 added the prefix only after a block was committed when installed this way; update to 0.3.2 or later to get the prefix while typing.
-
-### From a GitHub release
-
-1. Open the [latest release](https://github.com/Asaki14/logseq-journal-time-prefix/releases/latest).
-2. Download `logseq-journal-time-prefix-v*.zip`. Do not download GitHub’s automatically generated `Source code` archives.
-3. Extract the ZIP.
-4. Enable Developer Mode in Logseq.
-5. Open `Plugins` and select `Load unpacked plugin`.
-6. Select the extracted `logseq-journal-time-prefix` folder.
-
-To update, replace the old folder with the folder from the latest release and reload the plugin in Logseq.
-
-## Usage
-
-1. Open today’s journal page.
-2. Type the first character in a top-level block directly under the journal. The time prefix appears and the caret stays behind it, so you can keep typing.
-3. To change the prefix style or exclude some content, click the toolbar clock button and edit the settings above in the popover, or open them under `Plugins` → `Journal Time Prefix` → `Settings`.
-
-The plugin has no commands or keybindings; it works as soon as it is installed.
-
-## Development
-
-Node.js 20 or later is required.
-
-```bash
-npm ci
-npm run check
-```
-
-Continuous build:
-
-```bash
-npm run dev
-```
-
-After changing the sources run `npm run build`, then reload the plugin in Logseq.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow. User-visible changes belong under `Unreleased` in [CHANGELOG.md](CHANGELOG.md); agent notes are in [AGENTS.md](AGENTS.md).
 
 ## License
 
